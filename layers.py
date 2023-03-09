@@ -16,6 +16,22 @@ class attention(nn.Module):
             return correlation_matrix, self.softmax(correlation_matrix+self.causal_factor) 
         return correlation_matrix, self.softmax(correlation_matrix)   
 
+    
+
+class Linear(nn.Module):
+    def __init__(self, d_in, d_out, bias = False):
+        super().__init__()
+        self.M = torch.randn(d_out, d_in)
+        if not bias:
+            self.b = torch.zeros(d_out, 1)
+        self.bias = bias    
+        
+    def forward(self, x):
+        if self.bias:
+            return self.M @ x + self.b
+        return self.M @ x
+    
+    
 class Upsampling(nn.Module):
     def __init__(self, d_out = 128, kernel_size = 8, bias = False):
         Conv = nn.Conv1d(in_channels = 1, 
