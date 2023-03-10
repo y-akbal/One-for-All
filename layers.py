@@ -55,17 +55,31 @@ class multi__att_head(nn.Module):
 
 
 class Upsampling(nn.Module):
-    def __init__(self, d_out = 128, kernel_size = 8, conv_bias = False, att_heads = 5):
+    def __init__(self, ts_used: int = 5, lags: int = 512, d_out = 128, pool_size = 4, conv_bias = False, att_heads = 5, ):
+        assert (lags/d_out).is_integer(), "Make sure that lag size is divisible by pool_size"
+        
         self.Conv = nn.Conv1d(in_channels = 1, 
                          out_channels = d_out, 
-                         kernel_size = kernel_size,
+                         kernel_size = pool_size,
                          bias = conv_bias
                         )
+        
         self.heads = multi__att_head(d_out, num_heads = att_heads)
         self.activation = F.gelu
         self.normalization = nn.LayerNorm(d_out)
         self.dense = Linear(d_out, d_out)
+        ## -- Embedding Layers -- ##
+        #self.ts_embedding
         
-    def forward(self, x):
-        time_series, positional_embeddings, ts_embedding = x
+        
+        
+        
+    def forward(self, x :tuple) -> torch.Tensor:
+        ts, pe, te = x 
+        # ts: Bx1xW (W here is used for Lags), 
+        # pe: (BxHxW) positional embeddings of time series, 
+        # te: (Embedding (geospatial) of the time series depending)
+        
         pass
+
+    
