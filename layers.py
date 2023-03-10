@@ -26,16 +26,24 @@ class single_att_head(nn.Module):
         self.causal = causal
         self.W = torch.randn(d_in, d_in)/(d_in**0.5) ### Xavier init, HxH
         if self.causal:
-            self.causal_factor = torch.tril(-torch.inf*torch.ones(d_in,d_in), diagonal = -1)
-
+            self.causal_factor = torch.tril(-torch.inf*torch.ones(512,512), diagonal = -1)
+    
     def forward(self, x):
         x_ = self.W @ x # BxHxH, BxHxW -> BxHxW
+        
         corr_mat = (x_.transpose(-1, -2) @ x_)/self.d_in**0.5  #BxWxH,BxHxW -> BxWxW        
+        
         if self.causal: ## killing att. to future if asked
             corr_mat += self.causal_factor
         
         softmaxed = F.softmax(corr_mat, 1) #BxWxW -> BxWxW, softmaxed along axis 1
-        return x @ softmaxed #BxWxW, BxHxW
+        return x @ softmaxed #BxHxW
+
+
+single_att_head(10)(torch.randn(1,10,512))
+
+
+
 
 class multi__att_head(nn.Module):
     def __init__(self, d_in, num_heads = 5, causal = True, **kwargs):
@@ -74,7 +82,7 @@ class Upsampling(nn.Module):
                          bias = conv_bias
                         )
         
-        self.heads = multi__att_head(d_out, num_heads = att_heads)
+        self.heads = multi__att_head(self.num_pools, num_heads = att_heads)
         self.activation = activation
         self.normalization = nn.LayerNorm(self.num_pools)
         self.dense = Linear(d_out, d_out)
@@ -92,10 +100,26 @@ class Upsampling(nn.Module):
         # pe: (BxHxW) positional embeddings of time series, 
         # te: (Embedding (geospatial) of the time series depending)
         convolved_ts = self.Conv(ts)
-        convolved_ts += self.ts_embedding(pe)
+        convolved_ts += self.ts_embedding(pe)  ## we add embeddings 
         activated = self.activation(convolved_ts)
         normalized = self.normalization(activated) ##Layer normalization
-                
-        return normalized
+        dense_applied = self.dense(normalized)    
+        #dense_applied += self.ts_emmebding(te)
+        
+            
+        return dense_applied
 
 
+
+m = Upsampling(pool_size = 4, d_out = 4)((torch.randn(2,1,512), torch.tensor([[1],[2]]), torch.tensor([[2],[3]])))
+
+m.shape
+
+multi__att_head(4)
+
+m.shape
+
+m[0].shape
+
+
+m[1].shape
