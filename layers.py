@@ -55,31 +55,47 @@ class multi__att_head(nn.Module):
 
 
 class Upsampling(nn.Module):
-    def __init__(self, ts_used: int = 5, lags: int = 512, d_out = 128, pool_size = 4, conv_bias = False, att_heads = 5, ):
-        assert (lags/d_out).is_integer(), "Make sure that lag size is divisible by pool_size"
-        
+    def __init__(self, ts_used: int = 5, 
+                 lags: int = 512, 
+                 d_out = 128, 
+                 pool_size = 4, 
+                 conv_bias = False, 
+                 att_heads = 5,
+                 activation = F.gelu, 
+                 **kwargs):
+        super().__init__(**kwargs)
+        assert (lags/pool_size).is_integer(), "Make sure that lag size is divisible by pool_size"
+        self.num_pools = int(lags/pool_size)
+        self.lags = lags
         self.Conv = nn.Conv1d(in_channels = 1, 
                          out_channels = d_out, 
                          kernel_size = pool_size,
+                         stride = pool_size,
                          bias = conv_bias
                         )
         
         self.heads = multi__att_head(d_out, num_heads = att_heads)
-        self.activation = F.gelu
-        self.normalization = nn.LayerNorm(d_out)
+        self.activation = activation
+        self.normalization = nn.LayerNorm(self.num_pools)
         self.dense = Linear(d_out, d_out)
+        
         ## -- Embedding Layers -- ##
-        #self.ts_embedding
+        self.ts_embedding = nn.Embedding(self.num_pools, self.num_pools)
         
         
         
         
     def forward(self, x :tuple) -> torch.Tensor:
         ts, pe, te = x 
+        assert ts.shape[-1] == self.lags, f"{self.lags} is not equal to {ts.shape[-1]}"
         # ts: Bx1xW (W here is used for Lags), 
         # pe: (BxHxW) positional embeddings of time series, 
         # te: (Embedding (geospatial) of the time series depending)
-        
-        pass
+        convolved_ts = self.Conv(ts)
+        convolved_ts += self.ts_embedding(pe)
+        activated = self.activation(convolved_ts)
+        normalized = self.normalization(activated) ##Layer normalization
+                
+        return normalized
 
-    
+
