@@ -4,13 +4,15 @@ from torch.nn import functional as F
 
 
 
-class Linear(nn.Module):  #B*H*L -> B*H'*L adjusted the columns in each batch, no touch to rows directly
-    def __init__(self, d_in, d_out, bias = False):
+
+class Linear(nn.Module):  #B*H*L -> B*H'*L adjusted the columns in each batch, no touch rows directly
+    def __init__(self, d_in, d_out, bias = False, dropout = 0.5):
         super().__init__()
         self.M = torch.randn(d_out, d_in)/d_in**0.5 ### Xavier initialization
         if not bias:
             self.b = torch.zeros(d_out, 1)
         self.bias = bias    
+        self.dropout = dropout
 
     def forward(self, x):
         res = self.M @ x
@@ -88,6 +90,7 @@ class Upsampling(nn.Module):
         
         ## -- Embedding Layers -- ##
         self.ts_embedding = nn.Embedding(self.num_pools, self.num_pools)
+        #self.te_embedding = nn.Embedding()
         
         
         
@@ -99,11 +102,11 @@ class Upsampling(nn.Module):
         # pe: (BxHxW) positional embeddings of time series, 
         # te: (Embedding (geospatial) of the time series depending)
         convolved_ts = self.Conv(ts)
-        convolved_ts += self.ts_embedding(pe)  ## we add embeddings 
+        convolved_ts += self.ts_embedding(pe)  ## we add  possitional embeddings 
         activated = self.activation(convolved_ts)
         normalized = self.normalization(activated) ##Layer normalization
         dense_applied = self.dense(normalized)    
-        #dense_applied += self.ts_emmebding(te)
+        dense_applied += self.ts_embedding(te)
         
             
         return dense_applied

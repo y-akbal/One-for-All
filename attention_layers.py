@@ -22,69 +22,75 @@ class Linear(nn.Module):  #B*H*L -> B*H'*L adjusted the columns in each batch, n
 
 
 class single_head_attention(nn.Module): 
-    def __init__(self, d_in, d_out, dropout = 0.2, causal = True):
+    def __init__(self, d_in, d_out, dropout = 0.2, causal = True, lag = 512):
         super().__init__()
         
-        self.L_Q = Linear(d_in, d_out, dropout = dropout)
+        assert (d_in/d_out).is_integer(), f"d_in/d_out should be integer while yours {d_in/d_out} "
+        
+        self.d_in = d_in  
+        self.d_out = d_out  
+        self.causal = causal
+        self.W = lag
+        ## EXP: d_in = H, d_out = H'    
+        self.L_Q = Linear(d_in, d_out, dropout = dropout)  
         self.L_K = Linear(d_in, d_out, dropout = dropout)
         self.L_V = Linear(d_in, d_out, dropout = dropout)
         
-        ### Simple Stuff ###
-        self.__compiled__ = None
+        if self.causal:
+            self.causal_factor = torch.tril(-torch.inf*torch.ones(self.W,self.W), diagonal = -1)
     
+    def forward(self, x): #BxHxL -> BxH'xL
+        Q, K, V = x
+        Q_d = self.L_Q(Q)  #BxHxL -> BxH'xW
+        K_d = self.L_K(K)  #BxHxL -> BxH'xW
+        V_d = self.L_V(V)  #BxHxL -> BxH'xW
+        ## Correlation matrix
+        corr_mat = (Q_d.transpose(-1, -2) @ K_d)/self.d_out**0.5 #B'xWxW
+        
+        if self.causal:
+            corr_mat += self.causal_factor
+        
+        softmaxed = F.softmax(corr_mat, 1) #BxWxW
+        
+        return V_d @ softmaxed #BxH'xW, BxWxW -> BxH'xW
+
+    
+class multi_head_attention(nn.Module):
+    def __init__(self, n_heads = 5, dropout = 0.5, causal = True):  
+        # We will borrow some lazyness of TensorFlow 
+        # Thank you TensorFlow, 
+        # We appreciate your effort, 
+        # You can sit down now!
+        super().__init__()
+        self.__compiled__ = False
+        self.n_heads = n_heads
+        self.dropout = dropout
+        self.causal = causal
+        
     @property
     def compiled(self):
         return self.__compiled__
     
+    @compiled.setter
+    def compiled(self, x):
+        assert False, "You should first compile the model by doing at least one forward pass!!!"
     
     def __build__(self, shape):
-        self.dims = None
+        _, d_in, lags = shape
+        assert (d_in/self.n_heads).is_integer(), "H should be divisible by the number of heads"
+        self.heads = [single_head_attention(d_in, d_in//self.n_heads, self.dropout, self.causal, lags) for i in range(self.n_heads)]
         self.__compiled__ = True
-    
-    def forward(self, x): #BxHxL -> BxH'xL
-        
-        if not self.compiled: 
-            # check if the layer 
-            # compiled to see if 
-            # the dims are set 
-            # correctly
-            self.__build__(x.shape)
-            
-
-        Q, K, V = x
-        Q_d = self.L_Q(Q)  #BxHxL -> BxH'xL
-        K_d = self.L_K(K)  #BxHxL -> BxH'xL
-        V_d = self.L_V(V)  #BxHxL -> BxH'xL
-        
-        corr_mat = (Q_d.transpose(-1, -2) @ K_d)/self.d_k**0.5
-        
-        if self.causal:
-            corr_mat += 1
-        
-        softmaxed = F.softmax(corr_mat, 0)
-        return V_d @ softmaxed #BxH'xL
-# 
-    
-class multi_head_attention(nn.Module):
-    def __init__(self, n_heads = 5, dropout = 0.5):  
-        # We will borrow some notation from tensorflow 
-        # Thank you tensorflow, 
-        # We appreciate your effort, 
-        # You can sit down now!
-        super().__init__()
-        self.compiled = False
-        self.n_heads = n_heads
-        self.dropout = dropout
-        pass
-    def __build__(self, shape):
-        #
-        #
-        #
-        #
-        pass 
+                
     def forward(self, x): #concat[BxH'xL for i in range(H/H')] -> BxHxL
         if not self.compiled:
-            pass ## do sth here
-        
-        Q, K, T = x
-        pass
+            assert len(x) == 3, "True shape can not be referred!"
+            shape_ = x[-1].shape
+            self.__build__(shape_)
+            
+        Q, K, V = x            
+        Forward_heads = [self.heads[i]([Q, K, V]) for i in range(self.n_heads)]
+        return torch.concat(Forward_heads, 1)
+
+
+
+
