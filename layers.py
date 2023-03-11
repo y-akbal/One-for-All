@@ -4,7 +4,7 @@ from torch.nn import functional as F
 
 
 
-class Linear(nn.Module):  #B*H*L -> B*H'*L adjusted the columns in each batch, no touch rows directly
+class Linear(nn.Module):  #B*H*L -> B*H'*L adjusted the columns in each batch, no touch to rows directly
     def __init__(self, d_in, d_out, bias = False):
         super().__init__()
         self.M = torch.randn(d_out, d_in)/d_in**0.5 ### Xavier initialization
