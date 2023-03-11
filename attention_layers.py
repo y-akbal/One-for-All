@@ -16,7 +16,7 @@ class Linear(nn.Module):  #B*H*L -> B*H'*L adjusted the columns in each batch, n
     def forward(self, x):
         res = self.M @ x
         if self.bias:
-            res += self.b
+            res += self.bias
         res = self.dropout(res)            
         return res 
 
@@ -44,7 +44,7 @@ class single_head_attention(nn.Module):
         Q_d = self.L_Q(Q)  #BxHxL -> BxH'xW
         K_d = self.L_K(K)  #BxHxL -> BxH'xW
         V_d = self.L_V(V)  #BxHxL -> BxH'xW
-        ## Correlation matrix
+        ## Correlation
         corr_mat = (Q_d.transpose(-1, -2) @ K_d)/self.d_out**0.5 #B'xWxW
         
         if self.causal:
@@ -77,9 +77,11 @@ class multi_head_attention(nn.Module):
     
     def __build__(self, shape):
         _, d_in, lags = shape
-        assert (d_in/self.n_heads).is_integer(), "H should be divisible by the number of heads"
+        assert (d_in/self.n_heads).is_integer(), f"{d_in/self.n_heads} is not an integer"
         self.heads = [single_head_attention(d_in, d_in//self.n_heads, self.dropout, self.causal, lags) for i in range(self.n_heads)]
+        ## !!! Yeah !!! ##                        
         self.__compiled__ = True
+        self.final_linear = Linear(d_in, d_in, dropout = self.dropout, bias = True)
                 
     def forward(self, x): #concat[BxH'xL for i in range(H/H')] -> BxHxL
         if not self.compiled:
@@ -89,8 +91,10 @@ class multi_head_attention(nn.Module):
             
         Q, K, V = x            
         Forward_heads = [self.heads[i]([Q, K, V]) for i in range(self.n_heads)]
-        return torch.concat(Forward_heads, 1)
+        concatted_heads = torch.concat(Forward_heads, 1)
+        return self.final_linear(concatted_heads)
 
 
 
+multi_head_attention()([x,x,x])
 
