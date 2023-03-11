@@ -112,14 +112,3 @@ class Upsampling(nn.Module):
 
 
 m = Upsampling(pool_size = 4, d_out = 4)((torch.randn(2,1,512), torch.tensor([[1],[2]]), torch.tensor([[2],[3]])))
-
-m.shape
-
-multi__att_head(4)
-
-m.shape
-
-m[0].shape
-
-
-m[1].shape
