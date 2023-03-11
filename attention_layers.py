@@ -8,17 +8,17 @@ class Linear(nn.Module):  #B*H*L -> B*H'*L adjusted the columns in each batch, n
     def __init__(self, d_in, d_out, bias = False, dropout = 0.5):
         super().__init__()
         self.M = torch.randn(d_out, d_in)/d_in**0.5 ### Xavier initialization
-        if not bias:
-            self.b = torch.zeros(d_out, 1)
+        if bias:
+            self.b = torch.ones(d_out, 1)
         self.bias = bias    
         self.dropout = nn.Dropout(p = dropout)
 
     def forward(self, x):
         res = self.M @ x
         if self.bias:
-            res += self.bias
+            res += self.b
         res = self.dropout(res)            
-        return res 
+        return res
 
 
 class single_head_attention(nn.Module): 
@@ -94,7 +94,4 @@ class multi_head_attention(nn.Module):
         concatted_heads = torch.concat(Forward_heads, 1)
         return self.final_linear(concatted_heads)
 
-
-
-multi_head_attention()([x,x,x])
 
