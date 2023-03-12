@@ -90,8 +90,8 @@ class multi_head_attention(nn.Module):
             self.__build__(shape_)
             
         Q, K, V = x            
-        Forward_heads = [self.heads[i]([Q, K, V]) for i in range(self.n_heads)]
-        concatted_heads = torch.concat(Forward_heads, 1)
-        return self.final_linear(concatted_heads)
+        Forward_heads = [self.heads[i]([Q, K, V]) for i in range(self.n_heads)] #[BxH'xW for i in range(H/H')] 
+        concatted_heads = torch.concat(Forward_heads, 1) #[BxH'xW for i in range(H/H')]  -> BxHxW
+        return self.final_linear(concatted_heads)  #BxHxW -> BxHxW
 
 
