@@ -104,8 +104,115 @@ class multi_head_attention(nn.Module):
             
             
         Q, K, V = x            
-        Forward_heads = [self.heads[i]([Q, K, V]) for i in range(self.n_heads)] #[BxH'xW for i in range(H/H')] 
-        concatted_heads = torch.concat(Forward_heads, 1) #[BxH'xW for i in range(H/H')]  -> BxHxW
+        Forward_heads = [self.heads[i]([Q, K, V]) for i in range(self.n_heads)] #[BxH'xW for _ in range(H/H')] 
+        concatted_heads = torch.concat(Forward_heads, 1) #[BxH'xW for _ in range(H/H')]  -> BxHxW
         return self.final_linear(concatted_heads) #BxHxW -> BxHxW
 
+class layernorm(nn.Module): # We noemalize the local copies not along time dimension
+    def __init__(self, dim, eps = 1e-5):
+        super().__init__()
+        self.eps = eps
+        self.gamma = nn.Parameter(torch.ones(dim))
+        self.beta = nn.Parameter(torch.zeros(dim))
+    def forward(self,x):
+        mean = x.mean(1, keepdims = True)
+        std = x.var(1, keepdims = True)
+        unit = (x-mean)/torch.sqrt(self.eps + std)
+        return self.gamma*unit + self.beta ### B*H*W -> B*H*W 
+    
+    def parameters(self):
+        return [self.gamma, self.beta]
 
+
+
+class block(nn.Module):
+    def __init__(self, d_in, n_heads = 4, dropout = 0.5, causal = True,
+                 expansion_size = 2, activation = nn.ReLU()):
+        super().__init__()
+        self.att_head= multi_head_attention(n_heads = n_heads, dropout = dropout,
+                                            causal = causal)
+        self.FFN = FFN(16, expansion_size= expansion_size,
+                       dropout = dropout,
+                       activation = activation)
+        self.ln1 = layernorm(d_in)
+        self.ln2 = layernorm(d_in)
+        
+    def forward(self, x): # B*H*W -> B*H*W
+        y = self.ln1(x)  
+        y = self.att_head([y,y,y])
+        y += x
+        
+        x = self.ln2(y)
+        x = self.FFN(x)
+        x = self.ln2(x)
+        x += y
+        
+        
+        return x
+
+
+class Upsampling(nn.Module):
+    def __init__(self, 
+                 lags: int = 512, ### input dimension (width)
+                 d_out = 128, ## output dimension (height)
+                 pool_size = 4, ## pool_sizes
+                 conv_bias = True, 
+                 dense_bias = False, 
+                 att_heads = 4, ### attention heads to be used
+                 activation = F.gelu, 
+                 num_of_ts=25, ### number of time series to be used
+                 **kwargs):
+        super().__init__(**kwargs)
+
+        assert (lags/pool_size).is_integer(), "Make sure that lag size is divisible by pool_size"
+        
+        self.num_pools = int(lags/pool_size)
+        self.num_of_ts = num_of_ts
+        self.lags = lags
+        self.Conv = nn.Conv1d(in_channels=1,
+                              out_channels=d_out,
+                              kernel_size=pool_size,
+                              stride=pool_size,
+                              bias=conv_bias
+                              )
+
+        self.activation = activation
+        self.normalization_1 = nn.LayerNorm(self.num_pools)
+        self.normalization_2 = nn.LayerNorm(self.num_pools)
+        self.dense = Linear(d_out,
+                            d_out,
+                            bias=dense_bias)
+
+        ## -- Begining of Embedding Layers -- ##
+        self.num_enum = torch.tensor([i for i in range(self.num_pools)])
+        # positional embedding of pools
+        self.pe_embedding = nn.Embedding(self.num_pools, d_out)
+        # positional embeddings of time series
+        self.ts_embedding = nn.Embedding(self.num_of_ts, d_out)
+        ## -- End of Embedding Layers -- ##
+
+        ## Attention Part ##
+        self.att = multi_head_attention(n_heads = att_heads, causal = True)
+
+    def forward(self, x: tuple) -> torch.Tensor:
+        ts, te = x ## split 
+        assert ts.shape[-1] == self.lags, f"{self.lags} is not equal to {ts.shape[-1]}"
+
+        # ts: Bx1xW (W here is used for Lags) the raw time series,
+        # pe: (BxHxW) positional embeddings of time series,
+        # te: (Embedding (geospatial) of the time series depending).
+
+        convolved_ts = self.Conv(ts)  # Bx1xW -> BxHxW
+
+        # BxHxW += #BxHxW (WxH -> HxW)   # Position embedding of pools
+        convolved_ts += self.pe_embedding(self.num_enum).transpose(-1, -2)
+        activated = self.activation(convolved_ts)  # BxHxW -> BxHxW
+        normalized = self.normalization_1(activated)  # BxHxW -> BxHxW
+        # BxHxW -> BxHxW (Dense layer is applied H dim)
+        dense_applied = self.dense(normalized)
+        # BxHxW += #BxHx1 (WxH -> HxW)   # Position embedding of time series
+        dense_applied += self.ts_embedding(te).transpose(-1, -2)
+        attention_calcd = self.att([dense_applied, dense_applied, dense_applied])
+        attention_calcd += convolved_ts
+        normalized = self.normalization_2(attention_calcd)  # BxHxW -> BxHxW
+        return normalized

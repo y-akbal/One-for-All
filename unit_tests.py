@@ -5,7 +5,7 @@ import numpy as np
 
 class model_test(ABC):  # This is called abstract base class
     @abstractmethod
-    def __init__(self, model):
+    def __init__(self, model, input_dim):
         self.model = model
 
     @abstractmethod
@@ -13,13 +13,16 @@ class model_test(ABC):  # This is called abstract base class
         pass
 
     @abstractmethod
-    def output_shapes(self, x):
+    def list_output_shapes(self, x):
         return x**2
+    @abstractmethod
+    def output_shapes(self, x):
+        pass
 
     @abstractmethod
     def count_params(self):
         lay = 0
-        for i in self.layer.parameters():
+        for i in self.model.parameters():
             lay += np.array(i.shape).prod()
         return lay
     
