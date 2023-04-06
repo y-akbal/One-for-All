@@ -23,3 +23,5 @@ class model_test(ABC):  # This is called abstract base class
             lay += np.array(i.shape).prod()
         return lay
     
+    
+    

@@ -4,21 +4,32 @@ from torch.nn import functional as F
 
 
 
-class Linear(nn.Module):  #B*H*L -> B*H'*L adjusted the columns in each batch, no touch rows directly
-    def __init__(self, d_in, d_out, bias = False, dropout = 0.5):
+class Linear(nn.Module):  # B*H*W -> B*H'*W adjusted the columns in each batch, no touch to rows directly
+    def __init__(self, d_in, d_out, bias=False, dropout = 0.5):
         super().__init__()
-        self.M = torch.randn(d_out, d_in)/d_in**0.5 ### Xavier initialization
-        if bias:
-            self.b = torch.ones(d_out, 1)
-        self.bias = bias    
-        self.dropout = nn.Dropout(p = dropout)
-
-    def forward(self, x):
+        self.M = nn.Parameter(torch.randn(d_out, d_in, requires_grad = True)*d_in**(-0.5))  # Xavier initialization
+        self.bias = bias
+        if self.bias:
+            self.b = nn.Parameter(torch.zeros(d_out, 1, requires_grad = True)) 
+        
+        self.dropout = nn.Dropout(dropout, inplace = False)
+    def forward(self, x): # Bxd_inxW -> Bxd_outxW
+        x = self.dropout(x) ## apply dropout!!!
         res = self.M @ x
         if self.bias:
             res += self.b
-        res = self.dropout(res)            
         return res
+
+class FFN(nn.Module):
+    def __init__(self, d_in, expansion_size = 2, dropout = 0.2, activation = nn.ReLU()) -> None:
+        super().__init__()
+        self.linear = nn.Sequential(
+            Linear(d_in= d_in, d_out = expansion_size*d_in, dropout = dropout),
+            activation,
+            Linear(d_in= expansion_size*d_in, d_out = d_in, dropout = dropout),
+        )
+    def forward(self, x):
+        return self.linear(x)
 
 
 class single_head_attention(nn.Module): 
@@ -46,15 +57,11 @@ class single_head_attention(nn.Module):
         V_d = self.L_V(V)  #BxHxL -> BxH'xW
         ## Correlation
         corr_mat = (Q_d.transpose(-1, -2) @ K_d)/self.d_out**0.5 #B'xWxW
-        
         if self.causal:
             corr_mat += self.causal_factor
-        
         softmaxed = F.softmax(corr_mat, 1) #BxWxW
-        
         return V_d @ softmaxed #BxH'xW, BxWxW -> BxH'xW
 
-    
 class multi_head_attention(nn.Module):
     def __init__(self, n_heads = 5, dropout = 0.5, causal = True):  
         # We will borrow some lazyness of TensorFlow 
@@ -74,24 +81,31 @@ class multi_head_attention(nn.Module):
     @compiled.setter
     def compiled(self, x):
         assert False, "You should first compile the model by doing at least one forward pass!!!"
+
     
     def __build__(self, shape):
         _, d_in, lags = shape
         assert (d_in/self.n_heads).is_integer(), f"{d_in/self.n_heads} is not an integer"
-        self.heads = [single_head_attention(d_in, d_in//self.n_heads, self.dropout, self.causal, lags) for i in range(self.n_heads)]
+        
+        self.heads = nn.ModuleList([single_head_attention(d_in, d_in//self.n_heads, self.dropout, self.causal, lags) for i in range(self.n_heads)])
+        
+        
         ## !!! Yeah !!! ##                        
         self.__compiled__ = True
+        ### This next layer is FFN after the attention layer (used for memorization):
         self.final_linear = Linear(d_in, d_in, dropout = self.dropout, bias = True)
                 
     def forward(self, x): #concat[BxH'xL for i in range(H/H')] -> BxHxL
         if not self.compiled:
+            ## x should be a list
             assert len(x) == 3, "True shape can not be referred!"
             shape_ = x[-1].shape
             self.__build__(shape_)
             
+            
         Q, K, V = x            
         Forward_heads = [self.heads[i]([Q, K, V]) for i in range(self.n_heads)] #[BxH'xW for i in range(H/H')] 
         concatted_heads = torch.concat(Forward_heads, 1) #[BxH'xW for i in range(H/H')]  -> BxHxW
-        return self.final_linear(concatted_heads)  #BxHxW -> BxHxW
+        return self.final_linear(concatted_heads) #BxHxW -> BxHxW
 
 
