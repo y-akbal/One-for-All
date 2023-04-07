@@ -177,8 +177,8 @@ class Upsampling(nn.Module):
                               )
 
         self.activation = activation
-        self.normalization_1 = nn.LayerNorm(self.num_pools)
-        self.normalization_2 = nn.LayerNorm(self.num_pools)
+        #self.normalization_1 = nn.LayerNorm(self.num_pools)  ### This part is important!!!
+        #self.normalization_2 = nn.LayerNorm(self.num_pools) ### Fix this part, mind the error messages!!!
         self.dense = Linear(d_out,
                             d_out,
                             bias=dense_bias)
