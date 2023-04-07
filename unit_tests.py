@@ -15,10 +15,7 @@ class model_test(ABC):  # This is called abstract base class
     @abstractmethod
     def list_output_shapes(self, x):
         return x**2
-    @abstractmethod
-    def output_shapes(self, x):
-        pass
-
+    
     @abstractmethod
     def count_params(self):
         lay = 0

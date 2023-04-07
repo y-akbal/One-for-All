@@ -136,6 +136,5 @@ class Upsampling(nn.Module):
         return normalized
 
 
-
 Upsampling(pool_size=4, d_out=4)((torch.randn(3, 1, 512), torch.tensor([[24], [2], [5]]))).shape
 
