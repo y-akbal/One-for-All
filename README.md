@@ -4,8 +4,8 @@ Some files related to the upcoming manuscript which revolves around ensemble lea
 2) layers.py contains some of the layers to be used. Most of the time we implement our own layers,
 3) Attention layers contains multihead attention sort layers but a bit abstracted in some other sense.
 
+4) train_data_gen.py will contain necessary functions to grab the data out of csv files and do some preprocessing and prepare them (this is partially ready).
 Things to do:
-  4) data_pipe.py will contain necessary functions to grab the data out of csv files and do some preprocessing and prepare them.
   5) Unit_tests.py will contain a base class that contain some utility and unit tests to test the model. 
   6) trainer.py - probably training such a huge model will take a lot of time, therefore we may need to parallelize training process. This file will contain some functions to achieve this.
   
