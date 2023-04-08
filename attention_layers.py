@@ -20,6 +20,9 @@ class Linear(nn.Module):  # B*H*W -> B*H'*W adjusted the columns in each batch, 
             res += self.b
         return res
 
+
+
+
 class FFN(nn.Module):
     def __init__(self, d_in, expansion_size = 2, dropout = 0.2, activation = nn.ReLU()) -> None:
         super().__init__()
@@ -32,8 +35,9 @@ class FFN(nn.Module):
         return self.linear(x)
 
 
+
 class single_head_attention(nn.Module): 
-    def __init__(self, d_in, d_out, dropout = 0.2, causal = True, lag = 512):
+    def __init__(self, d_in, d_out, lag = 512, dropout = 0.2, causal = True):
         super().__init__()
         
         assert (d_in/d_out).is_integer(), f"d_in/d_out should be integer while yours {d_in/d_out} "
@@ -48,7 +52,7 @@ class single_head_attention(nn.Module):
         self.L_V = Linear(d_in, d_out, dropout = dropout)
         
         if self.causal:
-            self.causal_factor = torch.tril(-torch.inf*torch.ones(self.W,self.W), diagonal = -1)
+            self.causal_factor = nn.Parameter(torch.tril(-torch.inf*torch.ones(self.W,self.W), diagonal = -1))
     
     def forward(self, x): #BxHxL -> BxH'xL
         Q, K, V = x
@@ -62,51 +66,35 @@ class single_head_attention(nn.Module):
         softmaxed = F.softmax(corr_mat, 1) #BxWxW
         return V_d @ softmaxed #BxH'xW, BxWxW -> BxH'xW
 
+    
 class multi_head_attention(nn.Module):
-    def __init__(self, n_heads = 5, dropout = 0.5, causal = True):  
-        # We will borrow some lazyness of TensorFlow 
-        # Thank you TensorFlow, 
-        # We appreciate your effort, 
-        # You can sit down now!
+    def __init__(self, d_in, lags, n_heads = 5, dropout = 0.5, causal = True):  
         super().__init__()
         self.__compiled__ = False
         self.n_heads = n_heads
         self.dropout = dropout
         self.causal = causal
-        
-    @property
-    def compiled(self):
-        return self.__compiled__
-    
-    @compiled.setter
-    def compiled(self, x):
-        assert False, "You should first compile the model by doing at least one forward pass!!!"
-
-    
-    def __build__(self, shape):
-        _, d_in, lags = shape
         assert (d_in/self.n_heads).is_integer(), f"{d_in/self.n_heads} is not an integer"
-        
-        self.heads = nn.ModuleList([single_head_attention(d_in, d_in//self.n_heads, self.dropout, self.causal, lags) for i in range(self.n_heads)])
-        
-        
+        ## -- ##
+        self.heads = nn.ModuleList([single_head_attention(d_in, d_in//self.n_heads, lag = lags, dropout = self.dropout, causal = self.causal) for i in range(self.n_heads)])
         ## !!! Yeah !!! ##                        
         self.__compiled__ = True
         ### This next layer is FFN after the attention layer (used for memorization):
         self.final_linear = Linear(d_in, d_in, dropout = self.dropout, bias = True)
-                
+
     def forward(self, x): #concat[BxH'xL for i in range(H/H')] -> BxHxL
-        if not self.compiled:
-            ## x should be a list
-            assert len(x) == 3, "True shape can not be referred!"
-            shape_ = x[-1].shape
-            self.__build__(shape_)
-            
-            
         Q, K, V = x            
         Forward_heads = [self.heads[i]([Q, K, V]) for i in range(self.n_heads)] #[BxH'xW for _ in range(H/H')] 
         concatted_heads = torch.concat(Forward_heads, 1) #[BxH'xW for _ in range(H/H')]  -> BxHxW
         return self.final_linear(concatted_heads) #BxHxW -> BxHxW
+    
+    
+head = multi_head_attention(100, 128)    
+head.to("cuda")
+x = torch.randn(1, 100, 128)
+x = x.to("cuda")
+head([x,x,x]).shape
+
 
 class layernorm(nn.Module): # We noemalize the local copies not along time dimension
     def __init__(self, dim, eps = 1e-5):
@@ -116,28 +104,45 @@ class layernorm(nn.Module): # We noemalize the local copies not along time dimen
         self.beta = nn.Parameter(torch.zeros(dim))
     def forward(self,x):
         mean = x.mean(1, keepdims = True)
-        std = x.var(1, keepdims = True)
-        unit = (x-mean)/torch.sqrt(self.eps + std)
+        var = x.var(1, keepdims = True)
+        unit = (x-mean)/torch.sqrt(self.eps + var)
         return self.gamma*unit + self.beta ### B*H*W -> B*H*W 
     
     def parameters(self):
         return [self.gamma, self.beta]
 
 
+m = layernorm(512)
+m.to("cuda")
+torch.compile(m)
+x = torch.randn(1, 100, 512)
+x = x.to("cuda")
+m(x)
+
 
 class block(nn.Module):
-    def __init__(self, d_in, n_heads = 4, dropout = 0.5, causal = True,
-                 expansion_size = 2, activation = nn.ReLU()):
+    def __init__(self, 
+                 d_in, ### intermediate dimension
+                 width = 128,  ### width of time series to be used
+                 n_heads = 4, 
+                 dropout = 0.5, 
+                 causal = True,
+                 expansion_size = 2, 
+                 activation = nn.GELU()):
         super().__init__()
-        self.att_head= multi_head_attention(n_heads = n_heads, dropout = dropout,
+        self.att_head = multi_head_attention(n_heads = n_heads, 
+                                             dropout = dropout,
+                                             lags = width,
+                                             d_in = d_in,
                                             causal = causal)
-        self.FFN = FFN(16, expansion_size= expansion_size,
+        self.FFN = FFN(d_in, 
+                       expansion_size= expansion_size,
                        dropout = dropout,
                        activation = activation)
-        self.ln1 = layernorm(d_in)
-        self.ln2 = layernorm(d_in)
+        self.ln1 = layernorm(width)
+        self.ln2 = layernorm(width)
         
-    def forward(self, x): # B*H*W -> B*H*W
+    def forward(self, x): #B*H*W -> B*H*W
         y = self.ln1(x)  
         y = self.att_head([y,y,y])
         y += x
@@ -148,7 +153,12 @@ class block(nn.Module):
         x += y
         
         
-        return x
+        return y
+    
+block_ = block(128, 512)    
+block_.to("cuda")
+x = torch.randn(1, 128, 512).to("cuda")
+block_(x)
 
 
 class Upsampling(nn.Module):
@@ -177,14 +187,14 @@ class Upsampling(nn.Module):
                               )
 
         self.activation = activation
-        #self.normalization_1 = nn.LayerNorm(self.num_pools)  ### This part is important!!!
-        #self.normalization_2 = nn.LayerNorm(self.num_pools) ### Fix this part, mind the error messages!!!
+        self.normalization_1 = layernorm(self.num_pools) ### This part is important!!!
+        self.normalization_2 = layernorm(self.num_pools) ### Fix this part, mind the error messages!!!
         self.dense = Linear(d_out,
                             d_out,
                             bias=dense_bias)
 
         ## -- Begining of Embedding Layers -- ##
-        self.num_enum = torch.tensor([i for i in range(self.num_pools)])
+        self.num_enum = torch.tensor([i for i in range(self.num_pools)], requires_grad = False, device = "cuda")
         # positional embedding of pools
         self.pe_embedding = nn.Embedding(self.num_pools, d_out)
         # positional embeddings of time series
@@ -192,7 +202,7 @@ class Upsampling(nn.Module):
         ## -- End of Embedding Layers -- ##
 
         ## Attention Part ##
-        self.att = multi_head_attention(n_heads = att_heads, causal = True)
+        self.att = multi_head_attention(n_heads = att_heads, causal = True, d_in = d_out, lags = self.num_pools)
 
     def forward(self, x: tuple) -> torch.Tensor:
         ts, te = x ## split 
@@ -212,7 +222,27 @@ class Upsampling(nn.Module):
         dense_applied = self.dense(normalized)
         # BxHxW += #BxHx1 (WxH -> HxW)   # Position embedding of time series
         dense_applied += self.ts_embedding(te).transpose(-1, -2)
+        
         attention_calcd = self.att([dense_applied, dense_applied, dense_applied])
         attention_calcd += convolved_ts
         normalized = self.normalization_2(attention_calcd)  # BxHxW -> BxHxW
         return normalized
+
+
+
+
+x = (torch.randn(3, 1, 512).to("cuda"), torch.tensor([[24], [2], [5]]).to("cuda"))
+
+mod = Upsampling(pool_size=4, lags = 512, d_out=4)
+
+mod.num_enum.device
+
+mod.to("cuda")
+
+for i in mod.parameters():
+    print(i.device)
+
+mod.state_dict()
+mod.to("cuda")
+
+mod(x)
