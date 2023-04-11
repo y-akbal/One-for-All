@@ -89,11 +89,6 @@ class multi_head_attention(nn.Module):
         return self.final_linear(concatted_heads) #BxHxW -> BxHxW
     
     
-head = multi_head_attention(100, 128)    
-head.to("cuda")
-x = torch.randn(1, 100, 128)
-x = x.to("cuda")
-head([x,x,x]).shape
 
 
 class layernorm(nn.Module): # We noemalize the local copies not along time dimension
@@ -112,12 +107,12 @@ class layernorm(nn.Module): # We noemalize the local copies not along time dimen
         return [self.gamma, self.beta]
 
 
-m = layernorm(512)
-m.to("cuda")
-torch.compile(m)
-x = torch.randn(1, 100, 512)
-x = x.to("cuda")
-m(x)
+# m = layernorm(512)
+# m.to("cuda")
+# torch.compile(m)
+# x = torch.randn(1, 100, 512)
+# x = x.to("cuda")
+# m(x)
 
 
 class block(nn.Module):
@@ -155,10 +150,10 @@ class block(nn.Module):
         
         return y
     
-block_ = block(128, 512)    
-block_.to("cuda")
-x = torch.randn(1, 128, 512).to("cuda")
-block_(x)
+# block_ = block(128, 512)    
+# block_.to("cuda")
+# x = torch.randn(1, 128, 512).to("cuda")
+# block_(x)
 
 
 class Upsampling(nn.Module):
@@ -171,6 +166,8 @@ class Upsampling(nn.Module):
                  att_heads = 4, ### attention heads to be used
                  activation = F.gelu, 
                  num_of_ts=25, ### number of time series to be used
+                 device = "cuda",
+                 channel_shuffle = False, ### we add channel shuffle to trick on early attention layers
                  **kwargs):
         super().__init__(**kwargs)
 
@@ -179,6 +176,7 @@ class Upsampling(nn.Module):
         self.num_pools = int(lags/pool_size)
         self.num_of_ts = num_of_ts
         self.lags = lags
+        self.channel_shuffle = channel_shuffle
         self.Conv = nn.Conv1d(in_channels=1,
                               out_channels=d_out,
                               kernel_size=pool_size,
@@ -194,7 +192,7 @@ class Upsampling(nn.Module):
                             bias=dense_bias)
 
         ## -- Begining of Embedding Layers -- ##
-        self.num_enum = torch.tensor([i for i in range(self.num_pools)], requires_grad = False, device = "cuda")
+        self.num_enum = torch.arange(self.num_pools, device = device if not None else "cuda")
         # positional embedding of pools
         self.pe_embedding = nn.Embedding(self.num_pools, d_out)
         # positional embeddings of time series
@@ -203,6 +201,9 @@ class Upsampling(nn.Module):
 
         ## Attention Part ##
         self.att = multi_head_attention(n_heads = att_heads, causal = True, d_in = d_out, lags = self.num_pools)
+        ## Channel Shuffle ##
+        if channel_shuffle: 
+            self.shuffle = nn.ChannelShuffle(2)
 
     def forward(self, x: tuple) -> torch.Tensor:
         ts, te = x ## split 
@@ -218,6 +219,9 @@ class Upsampling(nn.Module):
         convolved_ts += self.pe_embedding(self.num_enum).transpose(-1, -2)
         activated = self.activation(convolved_ts)  # BxHxW -> BxHxW
         normalized = self.normalization_1(activated)  # BxHxW -> BxHxW
+        if self.channel_shuffle:
+            normalized = self.channel_shuffle(normalized)
+            
         # BxHxW -> BxHxW (Dense layer is applied H dim)
         dense_applied = self.dense(normalized)
         # BxHxW += #BxHx1 (WxH -> HxW)   # Position embedding of time series
@@ -226,23 +230,22 @@ class Upsampling(nn.Module):
         attention_calcd = self.att([dense_applied, dense_applied, dense_applied])
         attention_calcd += convolved_ts
         normalized = self.normalization_2(attention_calcd)  # BxHxW -> BxHxW
+        
         return normalized
+x = torch.randn(1, 6,2)
 
-
-
+x
+lay = nn.ChannelShuffle(3)
+lay(x)
 
 x = (torch.randn(3, 1, 512).to("cuda"), torch.tensor([[24], [2], [5]]).to("cuda"))
-
 mod = Upsampling(pool_size=4, lags = 512, d_out=4)
-
-mod.num_enum.device
-
+mod(x[0], x[1])
+torch.compile(mod)
+mod(x)
 mod.to("cuda")
-
 for i in mod.parameters():
-    print(i.device)
-
+    print(i.device, i.shape)
 mod.state_dict()
 mod.to("cuda")
-
 mod(x)
