@@ -44,7 +44,6 @@ def get_csv_list() -> list:
 def statistical_results(
     ts: pd.Series,
 ) -> dict:  ### here you write all statistical properties of your time series
-    # p_value = adfuller(ts)[1]
     ##below we collect necessary statistics
     statistic_dict = {
         "Mean": ts.mean(),
@@ -52,7 +51,7 @@ def statistical_results(
         "Max": ts.max(),
         "Min": ts.min(),
         "length": ts.shape[0],
-        "p_value": adfuller(ts)[1],
+        # "p_value": adfuller(ts)[1],
     }
     return statistic_dict
 
@@ -72,10 +71,10 @@ def preprocess_csv(csv_file: str, numerical_column=-1) -> tuple:
     time_series = pandas_frame.iloc[:, numerical_column]  ### cleared time series
     #### Here we need to have p-values of unit-root tests, PACF results ACF results to get results on
     statistics = statistical_results(time_series)
-    mean = statistics["mean"]
-    std = statistics["std"]
-    max = statistics["max"]
-    min = statistics["min"]
+    mean = statistics["Mean"]
+    std = statistics["Std"]
+    max = statistics["Max"]
+    min = statistics["Min"]
     ####
     ### normalized_frame
     pandas_frame.iloc[:, numerical_column] = (
@@ -111,8 +110,6 @@ def main() -> None:
         except Exception:
             message += 1
             logger_.write_log(f"{Exception} is wrong with {csv_file}")
-
-    ### Data frame about spatial statistics:
     data_frame = pd.DataFrame().from_dict(spatial_statistics)
     data_frame = data_frame.transpose()
     data_frame.to_excel("results.xlsx")
@@ -130,3 +127,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
