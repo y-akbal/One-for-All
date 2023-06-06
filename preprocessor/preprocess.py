@@ -3,7 +3,11 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 import statsmodels
-from statsmodels.tsa.stattools import adfuller
+from statsmodels.tsa.stattools import adfuller, arma_order_select_ic
+
+import warnings
+
+warnings.filterwarnings("ignore")
 
 
 ### Some
@@ -41,18 +45,30 @@ def get_csv_list() -> list:
     return csv
 
 
-def statistical_results(
-    ts: pd.Series,
-) -> dict:  ### here you write all statistical properties of your time series
+def statistical_results(ts: pd.Series, advanced=False) -> dict:
+    ### here you write all statistical properties of your time series
     ##below we collect necessary statistics
-    statistic_dict = {
-        "Mean": ts.mean(),
-        "Std": ts.std(),
-        "Max": ts.max(),
-        "Min": ts.min(),
-        "length": ts.shape[0],
-        # "p_value": adfuller(ts)[1],
-    }
+    if advanced:
+        ord = arma_order_select_ic(ts[:2000], max_ar=6, max_ma=4, ic=["aic", "bic"])
+        statistic_dict = {
+            "Mean": ts.mean(),
+            "Std": ts.std(ddof=1),
+            "Max": ts.max(),
+            "Min": ts.min(),
+            "length": ts.shape[0],
+            "p_value": adfuller(ts)[1],
+            "aic_order": ord.aic_min_order,
+            "bic_order": ord.bic_min_order,
+        }
+    else:
+        statistic_dict = {
+            "Mean": ts.mean(),
+            "Std": ts.std(ddof=1),
+            "Max": ts.max(),
+            "Min": ts.min(),
+            "length": ts.shape[0],
+        }
+
     return statistic_dict
 
 
@@ -61,27 +77,28 @@ def preprocess_csv(csv_file: str, numerical_column=-1) -> tuple:
     pandas_frame = pandas_frame.loc[:, COLUMN_NAMES]
 
     numerical_series = pandas_frame.iloc[:, numerical_column].copy(deep=True)
-    ### --- Some
+    ### --- Some Preprocessing ---- ###
     numerical_series[numerical_series < 0] = np.nan
     numerical_series = numerical_series.interpolate(method="linear")
-
     pandas_frame.iloc[:, numerical_column] = numerical_series
-    del numerical_series
+
     ### Normalizing stuff
     time_series = pandas_frame.iloc[:, numerical_column]  ### cleared time series
     #### Here we need to have p-values of unit-root tests, PACF results ACF results to get results on
     statistics = statistical_results(time_series)
     mean = statistics["Mean"]
     std = statistics["Std"]
-    max = statistics["Max"]
-    min = statistics["Min"]
-    ####
-    ### normalized_frame
+    # max = statistics["Max"]
+    # min = statistics["Min"]
+    #### exclude columns ## ---
     pandas_frame.iloc[:, numerical_column] = (
         pandas_frame.iloc[:, numerical_column] - mean
     ) / std
 
-    return pandas_frame, statistics  ### this guy is the normalized frame BTW!
+    return (
+        pandas_frame,
+        statistics,
+    )  ### this guy is the normalized frame BTW!
 
 
 def main() -> None:
@@ -107,9 +124,9 @@ def main() -> None:
             preprocessed_pd.to_csv(name)
             spatial_statistics[csv_file] = statistics
             ##watchaa the order this is important
-        except Exception:
+        except Exception as exception:
             message += 1
-            logger_.write_log(f"{Exception} is wrong with {csv_file}")
+            logger_.write_log(f"{exception} is wrong with {csv_file}")
     data_frame = pd.DataFrame().from_dict(spatial_statistics)
     data_frame = data_frame.transpose()
     data_frame.to_excel("results.xlsx")
@@ -127,4 +144,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
