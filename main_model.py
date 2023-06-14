@@ -13,16 +13,6 @@ device = (
 import attention_layers
 from attention_layers import block, Upsampling, layernorm
 
-mod = Upsampling(pool_size=4, d_out=4)
-mod = mod.to("cuda")
-
-
-s = torch.tensor([[24], [2], [5]]).to(device)
-l = torch.randn(3, 1, 512).to(device)
-model = nn.Sequential(mod)
-model.to("cuda")
-mod([l,s])
-
 
 class main_model(nn.Module):
     def __init__(self, lags = 512, 
@@ -48,23 +38,3 @@ class main_model(nn.Module):
             x = layer(x)
         return x
 
-
-mod = main_model()
-mod.to(device)
-mod(l,s)
-
-s = torch.tensor([[1]]).to("cuda")
-s.shape
-l = torch.randn(1, 1,512).to("cuda")
-l.shape
-mod = main_model()
-mod.to("cuda")
-mod(l,s).shape
-
-
-import numpy as np
-lay = 0
-for i in mod.parameters():
-   
-    lay += np.array(i.shape).prod()
-lay
