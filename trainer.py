@@ -1,1 +1,0 @@
-### training details are here!!!
