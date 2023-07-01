@@ -5,13 +5,11 @@ import numpy as np
 
 class memmap_array:
     def __init__(self, name="array.dat"):
-        self.lengths = None
-        self.array = None
+        self.lengths = None ## Save for later use
+        self.array = None ## Save for later use
         self.name = name
-        self.fitted = False
-
-
-    
+        
+   
     def fit(self, dtype=np.float32):
         self.lengths = [
             len(pd.read_csv(file, low_memory=True)) for file in self.__getcsvlist__()
@@ -47,7 +45,6 @@ class memmap_array:
         self.array.flush()  ## we write everything to the disk!!!!
         Lengths.flush()  ## we write everything to the disk!!!!
 
-        self.fitted = True  ## set fitted to true
 
 
     def __getcsvlist__(self):
@@ -59,14 +56,6 @@ class memmap_array:
         return csv
 
 
-    @classmethod
-    def from_file(cls, name="array.dat"):
-        cls_ = cls()
-        cls_.array = np.memmap(name, mode="r", dtype=np.float32)
-        cls_.name = name
-        cls_.lengths = np.memmap("lengths" + name, mode="r", dtype=np.uint32)
-        cls_.fitted = True
-        return cls_
     def to_memmap_array(self):
         """
         This dude will work in tandem with the memmmap arrays
@@ -86,7 +75,7 @@ if __name__ == "__main__":
         L = memmap_array()
         L.fit(dtype=np.float32)
         print(
-        f"Memmap is initialized successfully. Total length is {len(L.array)}, and lengths are \n {L.lengths}"
+        f"Memmap is initialized successfully. Total length is {len(L.array)}, and lengths are \n {L.lengths}. Thank you b****"
         )
     except Exception as e:
         print(e)
