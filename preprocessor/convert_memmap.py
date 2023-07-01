@@ -10,13 +10,8 @@ class memmap_array:
         self.name = name
         self.fitted = False
 
-    def __getitem__(self, i):
-        assert self.fitted, "You should first fit your array"
-        if i < self.len:
-            return self.array[i]
-        else:
-            raise IndexError
 
+    
     def fit(self, dtype=np.float32):
         self.lengths = [
             len(pd.read_csv(file, low_memory=True)) for file in self.__getcsvlist__()
@@ -54,8 +49,6 @@ class memmap_array:
 
         self.fitted = True  ## set fitted to true
 
-    def convert_nparray(self):
-        self.array = np.array(self.array)
 
     def __getcsvlist__(self):
         list_ = os.listdir()
@@ -65,8 +58,6 @@ class memmap_array:
                 csv.append(file)
         return csv
 
-    def __len__(self):
-        return self.len
 
     @classmethod
     def from_file(cls, name="array.dat"):
@@ -74,14 +65,29 @@ class memmap_array:
         cls_.array = np.memmap(name, mode="r", dtype=np.float32)
         cls_.name = name
         cls_.lengths = np.memmap("lengths" + name, mode="r", dtype=np.uint32)
-        cls_.len = len(cls_.array)
         cls_.fitted = True
         return cls_
+    def to_memmap_array(self):
+        """
+        This dude will work in tandem with the memmmap arrays
+        """
+        return {"array": self.array, "lengths":self.lengths}        
 
     def __preprocess__(self, frame):
+        ### Here you can do whatever you like with the given frame object,
+        ### In particular, things picking some columns, and getting rid of some large values
+
         return frame.iloc[:, -1]
 
 
+
 if __name__ == "__main__":
-    L = memmap_array()
-    L.fit(dtype=np.float32)
+    try:
+        L = memmap_array()
+        L.fit(dtype=np.float32)
+        print(
+        f"Memmap is initialized successfully. Total length is {len(L.array)}, and lengths are \n {L.lengths}"
+        )
+    except Exception as e:
+        print(e)
+        
