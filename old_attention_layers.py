@@ -2,14 +2,10 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 
-#### Convention here we use: BxHxW ---- W here refers to the lags of the time series,
-#### H refers to population of lags via layers
-
 
 class Linear(
     nn.Module
-):  ## B*H*W -> B*H'*W adjusted the columns in each batch, no touch to rows directly
-    ## This layer just mixes H, no touch to lags
+):  # B*H*W -> B*H'*W adjusted the columns in each batch, no touch to rows directly
     def __init__(self, d_in, d_out, bias=False, dropout=0.5):
         super().__init__()
         self.M = nn.Parameter(
@@ -34,9 +30,6 @@ class FFN(nn.Module):
     def __init__(
         self, d_in, expansion_size=2, dropout=0.2, activation=nn.ReLU(), bias=True
     ) -> None:
-        assert expansion_size > 1, "You must have an expansion size greater than one"
-        ### This dude is FFN part as given in the all you need paper, we use nn.ReLU, we may
-        ## change this later, depending on needs.
         super().__init__()
         assert isinstance(expansion_size, int)
         self.linear = nn.Sequential(
@@ -49,9 +42,7 @@ class FFN(nn.Module):
         return self.linear(x)
 
 
-class layernorm(nn.Module):
-    # We noemalize the local copies not along time dimension
-    ## standard layer norm guy, horoko!!!
+class layernorm(nn.Module):  # We noemalize the local copies not along time dimension
     def __init__(self, dim, eps=1e-5):
         super().__init__()
         self.eps = eps
@@ -153,60 +144,84 @@ class Upsampling(nn.Module):
 ####### Aim for tomorrow is to implement,
 
 
-class multi_head_attention_f(nn.Module):
-    def __init__(self, embedding_dim=128, heads=4, lag=512, dropout=0.2, causal=True):
+class single_head_attention(nn.Module):
+    def __init__(self, d_in, d_out, lag=512, dropout=0.2, causal=True):
         super().__init__()
 
         assert (
-            embedding_dim / heads
-        ).is_integer(), (
-            f"embedding_dim/heads should be integer while yours {embedding_dim/heads} "
-        )
+            d_in / d_out
+        ).is_integer(), f"d_in/d_out should be integer while yours {d_in/d_out} "
 
-        self.embedding_dim = embedding_dim
-        self.heads = heads
+        self.d_in = d_in
+        self.d_out = d_out
         self.causal = causal
         self.W = lag
-        ### Attention Part ###
-        ### Frist Dropout layers
-        self.dropout_Q = nn.Dropout(p=dropout)
-        self.dropout_K = nn.Dropout(p=dropout)
-        self.dropout_V = nn.Dropout(p=dropout)
-        ### Weights ###
-        self.L_Q = nn.Parameter(
-            torch.randn(embedding_dim, embedding_dim) * (embedding_dim) ** (-0.5)
-        )
-        self.L_K = nn.Parameter(
-            torch.randn(embedding_dim, embedding_dim) * (embedding_dim) ** (-0.5)
-        )
-        self.L_V = nn.Parameter(
-            torch.randn(embedding_dim, embedding_dim) * (embedding_dim) ** (-0.5)
-        )
-        # self.dense = Linear(embedding_dim, embedding_dim, bias = True)
-        ### --- End of weights --- ###
+        ## EXP: d_in = H, d_out = H'
+        self.L_Q = Linear(d_in, d_out, dropout=dropout)
+        self.L_K = Linear(d_in, d_out, dropout=dropout)
+        self.L_V = Linear(d_in, d_out, dropout=dropout)
+
         if self.causal:
             self.causal_factor = nn.Parameter(
-                torch.tril(-torch.inf * torch.ones(self.W, self.W), diagonal=-1)
+                torch.tril(
+                    -torch.inf * torch.ones(self.W, self.W, requires_grad=False),
+                    diagonal=-1,
+                )
             )
-            ## No gradient is required in the above layer....
-            self.causal_factor.requires_grad = False
 
-    def forward(self, x):  # BxHxL -> BxHxL
-        K, Q, V = x[0], x[1], x[2]
-        K = self.dropout_K(self.L_K @ K)
-        Q = self.dropout_Q(self.L_Q @ Q)
-        V = self.dropout_V(self.L_V @ V)
-        K_v = K.view(-1, self.heads, int(self.embedding_dim / self.heads), self.W)
-        Q_v = Q.view(-1, self.heads, int(self.embedding_dim / self.heads), self.W)
-        V_v = V.view(-1, self.heads, int(self.embedding_dim / self.heads), self.W)
-
-        attention_scores = Q_v.transpose(-2, -1) @ K_v
+    ## No gradient is required in the above layer....
+    def forward(self, x):  # BxHxL -> BxH'xL
+        Q, K, V = x
+        Q_d = self.L_Q(Q)  # BxHxL -> BxH'xW
+        K_d = self.L_K(K)  # BxHxL -> BxH'xW
+        V_d = self.L_V(V)  # BxHxL -> BxH'xW
+        ## Correlation
+        corr_mat = (Q_d.transpose(-1, -2) @ K_d) / self.d_out**0.5  # B'xWxW
         if self.causal:
-            attention_scores += self.causal_factor
+            corr_mat += self.causal_factor / self.d_out**0.5
+        softmaxed = F.softmax(corr_mat, 1)  # BxWxW
+        return V_d @ softmaxed  # BxH'xW, BxWxW -> BxH'xW
 
-        scores = nn.Softmax(-2)(attention_scores) / self.embedding_dim**0.5
 
-        return (V_v @ scores).view(-1, self.embedding_dim, self.W)
+class multi_head_attention(nn.Module):
+    ### This layer is to be written from scratch using multi_head_attention
+    ### directly in one layer with no list comperehension stuff or somethin!!!!""
+    def __init__(self, d_in, lags, n_heads=5, dropout=0.5, causal=True):
+        super().__init__()
+        self.__compiled__ = False
+        self.n_heads = n_heads
+        self.dropout = dropout
+        self.causal = causal
+        assert (
+            d_in / self.n_heads
+        ).is_integer(), f"{d_in/self.n_heads} is not an integer"
+        ## -- ##
+        self.heads = nn.ModuleList(
+            [
+                single_head_attention(
+                    d_in,
+                    d_in // self.n_heads,
+                    lag=lags,
+                    dropout=self.dropout,
+                    causal=self.causal,
+                )
+                for i in range(self.n_heads)
+            ]
+        )
+        ## !!! Yeah !!! ##
+        self.__compiled__ = True
+        ### This next layer is FFN after the attention layer (used for memorization):
+        self.final_linear = Linear(d_in, d_in, dropout=self.dropout, bias=True)
+
+    def forward(self, x):  # concat[BxH'xL for i in range(H/H')] -> BxHxL
+        Q, K, V = x
+        Forward_heads = [
+            self.heads[i]([Q, K, V]) for i in range(self.n_heads)
+        ]  # [BxH'xW for _ in range(H/H')]
+        concatted_heads = torch.concat(
+            Forward_heads, 1
+        )  # [BxH'xW for _ in range(H/H')]  -> BxHxW
+        return self.final_linear(concatted_heads)  # BxHxW -> BxHxW
 
 
 class block(nn.Module):
@@ -240,3 +255,9 @@ class block(nn.Module):
         x = self.ln2(x)
         x += y
         return y
+
+
+# block_ = block(128, 512)
+# block_.to("cuda")
+# x = torch.randn(1, 128, 512).to("cuda")
+# block_(x)
