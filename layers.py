@@ -1,6 +1,7 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
+from torch.nn.parameter import Parameter, UninitializedParameter
 
 #### Convention here we use: BxHxW ---- W here refers to the lags of the time series,
 #### H refers to population of lags via layers
@@ -10,15 +11,17 @@ class Linear(
     nn.Module
 ):  ## B*H*W -> B*H'*W adjusted the columns in each batch, no touch to rows directly
     ## This layer just mixes H, no touch to lags
-    def __init__(self, d_in, d_out, bias=False, dropout=0.5):
+    ### Motivated by Pytorch original Linear Layer
+    def __init__(self, d_in, d_out, bias=False, dropout=0.1, device=None, dtype=None):
+        kwargs = {"device": device, "dtype": dtype}
         super().__init__()
-        self.M = nn.Parameter(
-            torch.randn(d_out, d_in, requires_grad=True)
+        self.M = Parameter(
+            torch.randn(d_out, d_in, requires_grad=True, **kwargs)
             * ((1 / (d_in + d_out)) ** (0.5))
         )  # Kaiming init
         self.bias = bias
         if self.bias:
-            self.b = nn.Parameter(torch.zeros(d_out, 1, requires_grad=True))
+            self.b = Parameter(torch.zeros(d_out, 1, requires_grad=True, **kwargs))
 
         self.dropout = nn.Dropout(dropout, inplace=False)
 
@@ -35,6 +38,7 @@ class FFN(nn.Module):
         self, d_in, expansion_size=2, dropout=0.2, activation=nn.ReLU(), bias=True
     ) -> None:
         assert expansion_size > 1, "You must have an expansion size greater than one"
+        assert isinstance(expansion_size, int), "Expansion size must be an integer"
         ### This dude is FFN part as given in the all you need paper, we use nn.ReLU, we may
         ## change this later, depending on needs.
         super().__init__()
