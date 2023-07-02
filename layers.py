@@ -42,7 +42,6 @@ class FFN(nn.Module):
         ### This dude is FFN part as given in the all you need paper, we use nn.ReLU, we may
         ## change this later, depending on needs.
         super().__init__()
-        assert isinstance(expansion_size, int)
         self.linear = nn.Sequential(
             Linear(d_in=d_in, d_out=expansion_size * d_in, dropout=dropout, bias=bias),
             activation,
@@ -82,6 +81,7 @@ class Upsampling(nn.Module):
         dense_bias=False,
         activation=F.gelu,
         num_of_ts=25,  ### number of time series to be used
+        num_of_clusters=10,  ### number of clusters of times series
         device="cuda",
         channel_shuffle=False,  ### we add channel shuffle to trick
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
@@ -120,20 +120,21 @@ class Upsampling(nn.Module):
         self.pe_embedding = nn.Embedding(self.num_pools, d_out)
         # positional embeddings of time series
         self.ts_embedding = nn.Embedding(self.num_of_ts, d_out)
+        self.cls_embedding = nn.Embedding(num_of_clusters, d_out)
         ## -- End of Embedding Layers -- ##
 
         if channel_shuffle:
             self.shuffle = nn.ChannelShuffle(channel_shuffle_group)
 
     def forward(self, x: tuple) -> torch.Tensor:
-        ts, te = x  ## split
+        ts, te, tc = x  ## split
         assert ts.shape[-1] == self.lags, f"{self.lags} is not equal to {ts.shape[-1]}"
 
         # ts: Bx1xW (W here is used for Lags) the raw time series,
         # pe: (BxHxW) positional embeddings of time series,
         # te: (Embedding (geospatial) of the time series depending).
 
-        convolved_ts = self.Conv(ts)  # Bx1xW -> BxHxW
+        convolved_ts = self.Conv(ts)  # Bx1xW -> BxHxW/pool_size
 
         # BxHxW += #BxHxW (WxH -> HxW)   # Position embedding of pools
         convolved_ts += self.pe_embedding(self.num_enum).transpose(-1, -2)
@@ -146,11 +147,25 @@ class Upsampling(nn.Module):
         # BxHxW -> BxHxW (Dense layer is applied H dim)
         dense_applied = self.FFN(normalized)
         # BxHxW += #BxHxW (WxH -> HxW) + #BxHx1 -> BxHxW   # Position embedding of time series
-        dense_applied += self.ts_embedding(te).transpose(-1, -2) + convolved_ts
+        dense_applied += (
+            convolved_ts
+            + self.ts_embedding(te).transpose(-1, -2)
+            + self.cls_embedding(tc).transpose(-1, -2)
+        )
 
         final_linear = self.dense(dense_applied)  # BxHxW-> BxHxW
 
-        return final_linear  # BxHxW-> BxHxW
+        return final_linear  # Bx1xW-> BxHxW/pool_size
+
+
+L = Upsampling(
+    device="cpu", pool_size=4, channel_shuffle=False, channel_shuffle_group=4
+)
+torch.manual_seed(0)
+x = torch.randn(1, 1, 512, device="cpu")
+q = [x, torch.tensor([1]), torch.tensor([2])]
+L.eval()
+L(q)
 
 
 ####### So far everything checked and unit root tests are not done explicitly ###########
