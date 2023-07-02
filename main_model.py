@@ -10,8 +10,8 @@ device = (
     else "cpu"
 )
 
-import attention_layers
-from attention_layers import block, Upsampling, layernorm
+import layers
+from layers import block, Upsampling, layernorm
 
 
 class main_model(nn.Module):

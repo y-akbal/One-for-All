@@ -35,7 +35,7 @@ class Linear(
 
 class FFN(nn.Module):
     def __init__(
-        self, d_in, expansion_size=2, dropout=0.2, activation=nn.ReLU(), bias=True
+        self, d_in, expansion_size=2, dropout=0.2, activation = nn.ReLU(), bias=True
     ) -> None:
         assert expansion_size > 1, "You must have an expansion size greater than one"
         assert isinstance(expansion_size, int), "Expansion size must be an integer"
@@ -81,7 +81,7 @@ class Upsampling(nn.Module):
         dense_bias=False,
         activation=F.gelu,
         num_of_ts=25,  ### number of time series to be used
-        num_of_clusters=10,  ### number of clusters of times series
+        num_of_clusters = None,  ### number of clusters of times series
         device="cuda",
         channel_shuffle=False,  ### we add channel shuffle to trick
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
@@ -120,19 +120,28 @@ class Upsampling(nn.Module):
         self.pe_embedding = nn.Embedding(self.num_pools, d_out)
         # positional embeddings of time series
         self.ts_embedding = nn.Embedding(self.num_of_ts, d_out)
-        self.cls_embedding = nn.Embedding(num_of_clusters, d_out)
+
+        self.num_of_clusters = num_of_clusters
+        if num_of_clusters != None:
+            
+            self.cls_embedding = nn.Embedding(num_of_clusters, d_out)
         ## -- End of Embedding Layers -- ##
 
         if channel_shuffle:
             self.shuffle = nn.ChannelShuffle(channel_shuffle_group)
 
     def forward(self, x: tuple) -> torch.Tensor:
-        ts, te, tc = x  ## split
+        if self.num_of_clusters:
+            ts, te, tc = x  ## split
+        else:
+            ts, te = x  ## split
+            
         assert ts.shape[-1] == self.lags, f"{self.lags} is not equal to {ts.shape[-1]}"
 
         # ts: Bx1xW (W here is used for Lags) the raw time series,
         # pe: (BxHxW) positional embeddings of time series,
         # te: (Embedding (geospatial) of the time series depending).
+        # tc: Clustered time series, depending on geospatial data
 
         convolved_ts = self.Conv(ts)  # Bx1xW -> BxHxW/pool_size
 
@@ -147,38 +156,31 @@ class Upsampling(nn.Module):
         # BxHxW -> BxHxW (Dense layer is applied H dim)
         dense_applied = self.FFN(normalized)
         # BxHxW += #BxHxW (WxH -> HxW) + #BxHx1 -> BxHxW   # Position embedding of time series
-        dense_applied += (
+        if not self.num_of_clusters:
+            dense_applied += (
             convolved_ts
             + self.ts_embedding(te).transpose(-1, -2)
             + self.cls_embedding(tc).transpose(-1, -2)
-        )
-
+            )
+        else:
+            dense_applied += (
+            convolved_ts
+            + self.ts_embedding(te).transpose(-1, -2)
+            )
         final_linear = self.dense(dense_applied)  # BxHxW-> BxHxW
 
         return final_linear  # Bx1xW-> BxHxW/pool_size
 
 
-L = Upsampling(
-    device="cpu", pool_size=4, channel_shuffle=False, channel_shuffle_group=4
-)
-torch.manual_seed(0)
-x = torch.randn(1, 1, 512, device="cpu")
-q = [x, torch.tensor([1]), torch.tensor([2])]
-L.eval()
-L(q)
-
-
-####### So far everything checked and unit root tests are not done explicitly ###########
-####### Aim for tomorrow is to implement,
-
-
-class multi_head_attention_f(nn.Module):
-    def __init__(self, embedding_dim=128, heads=4, lag=512, dropout=0.2, causal=True):
+class multi_head_attention(nn.Module):
+    def __init__(self, 
+                 embedding_dim=128, 
+                 heads=4, lag=512, 
+                 dropout=0.2, 
+                 causal=True):
         super().__init__()
 
-        assert (
-            embedding_dim / heads
-        ).is_integer(), (
+        assert (embedding_dim / heads).is_integer(), (
             f"embedding_dim/heads should be integer while yours {embedding_dim/heads} "
         )
 
@@ -201,8 +203,8 @@ class multi_head_attention_f(nn.Module):
         self.L_V = nn.Parameter(
             torch.randn(embedding_dim, embedding_dim) * (embedding_dim) ** (-0.5)
         )
-        # self.dense = Linear(embedding_dim, embedding_dim, bias = True)
-        ## Output linear layer is needed here!!!!
+        ### Final Linear Layer with no activation
+        self.dense = Linear(embedding_dim, embedding_dim, bias = True)
         ### --- End of weights --- ###
         if self.causal:
             self.causal_factor = nn.Parameter(
@@ -225,28 +227,39 @@ class multi_head_attention_f(nn.Module):
             attention_scores += self.causal_factor
 
         scores = nn.Softmax(-2)(attention_scores) / self.embedding_dim**0.5
+        attention_output = (V_v @ scores).view(-1, self.embedding_dim, self.W)
 
-        return (V_v @ scores).view(-1, self.embedding_dim, self.W)
+        return self.dense(attention_output)
+
+
 
 
 class block(nn.Module):
     def __init__(
         self,
-        d_in,  ### intermediate dimension
+        d_in,  ### embedding dimension
         width=128,  ### width of time series to be used
         n_heads=4,
-        dropout=0.5,
+        dropout=0.5,## dropout of FFN
+        att_head_dropout = 0.2, ## dropout of attention heads
         causal=True,
-        expansion_size=2,
-        activation=nn.GELU(),
+        expansion_size=2, ### expansion size of FFN
+        activation=nn.GELU("tanh"), ### this is used 
     ):
         super().__init__()
-        self.att_head = multi_head_attention_f(
-            n_heads=n_heads, dropout=dropout, lag=width, d_in=d_in, causal=causal
+        self.att_head = multi_head_attention(
+            heads=n_heads, dropout=att_head_dropout, 
+            lag=width, 
+            embedding_dim=d_in, 
+            causal = causal
         )
         self.FFN = FFN(
-            d_in, expansion_size=expansion_size, dropout=dropout, activation=activation
+            d_in, 
+            expansion_size=expansion_size, 
+            dropout=dropout, 
+            activation=activation
         )
+        ### Normalization layers
         self.ln1 = layernorm(width)
         self.ln2 = layernorm(width)
 
@@ -254,9 +267,9 @@ class block(nn.Module):
         y = self.ln1(x)
         y = self.att_head([y, y, y])
         y += x
-        ### Here a linear combination would be  needed
         x = self.ln2(y)
         x = self.FFN(x)
-        x = self.ln2(x)
         x += y
-        return y
+        return x
+    
+
