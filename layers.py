@@ -202,6 +202,7 @@ class multi_head_attention_f(nn.Module):
             torch.randn(embedding_dim, embedding_dim) * (embedding_dim) ** (-0.5)
         )
         # self.dense = Linear(embedding_dim, embedding_dim, bias = True)
+        ## Output linear layer is needed here!!!!
         ### --- End of weights --- ###
         if self.causal:
             self.causal_factor = nn.Parameter(
@@ -253,7 +254,7 @@ class block(nn.Module):
         y = self.ln1(x)
         y = self.att_head([y, y, y])
         y += x
-
+        ### Here a linear combination would be  needed
         x = self.ln2(y)
         x = self.FFN(x)
         x = self.ln2(x)
