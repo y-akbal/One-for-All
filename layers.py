@@ -1,11 +1,13 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-from torch.nn.parameter import Parameter, UninitializedParameter
+from torch.nn.parameter import Parameter
+import torch.nn.functional as F
+
 
 #### Convention here we use: BxHxW ---- W here refers to the lags of the time series,
 #### H refers to population of lags via layers
-#### On time permittion https://pytorch.org/docs/stable/nn.init.html
+#### On time permitting https://pytorch.org/docs/stable/nn.init.html
 ### Look at the above initializations as He initialization may sound better, for the first layers
 
 
@@ -73,6 +75,27 @@ class layernorm(nn.Module):
         return [self.gamma, self.beta]
 
 
+def channel_shuffleF(x, groups):
+    ## Grabbed this from https://github.com/jaxony/ShuffleNet/blob/master/model.py
+    ## Asdjusted properly
+    batchsize, height, width = x.data.size()
+
+    channels_per_group = height // groups
+
+    # reshape
+    x = x.view(batchsize, groups, channels_per_group, width)
+
+    # transpose
+    # - contiguous() required if transpose() is used before view().
+    #   See https://github.com/pytorch/pytorch/issues/764
+    x = torch.transpose(x, 1, 2).contiguous()
+
+    # flatten
+    x = x.view(batchsize, -1, width)
+
+    return x
+
+
 class Upsampling(nn.Module):
     def __init__(
         self,
@@ -80,7 +103,7 @@ class Upsampling(nn.Module):
         d_out=128,  ## output dimension (height)
         pool_size=4,  ## pool_sizes
         conv_bias=True,
-        dense_bias=False,
+        dense_bias=True,
         conv_activation=None,
         FFN_activation=nn.GELU("tanh"),
         num_of_ts=25,  ### number of time series to be used
@@ -89,7 +112,6 @@ class Upsampling(nn.Module):
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
         dropout_FFN=0.2,  ## droput of FFN layer,
         dropout_linear=0.2,  ##dropout of linear layer,
-        device="cuda",
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -128,9 +150,15 @@ class Upsampling(nn.Module):
             [i for i in range(self.num_pools)],
             dtype=torch.int,
             requires_grad=False,
-            device=device,
         )
-        self.register_buffer("pos_encod", self.num_enum)
+        self.register_buffer(
+            "num_enum",
+            torch.tensor(
+                [i for i in range(self.num_pools)],
+                dtype=torch.int,
+                requires_grad=False,
+            ),
+        )
 
         ## positional embedding of pools
 
@@ -144,8 +172,8 @@ class Upsampling(nn.Module):
         ## -- End of Embedding Layers -- ##
 
         ## channle shuffling ##
-        if channel_shuffle:
-            self.shuffle = nn.ChannelShuffle(channel_shuffle_group)
+        if self.channel_shuffle:
+            self.shuffle = lambda x: channel_shuffleF(x, channel_shuffle_group)
 
     def forward(self, x: tuple) -> torch.Tensor:
         if self.num_of_clusters != None:
@@ -190,16 +218,31 @@ class Upsampling(nn.Module):
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
 
 
-t = Upsampling(conv_activation=nn.GELU(), channel_shuffle=False)
+t = Upsampling(conv_activation=nn.GELU(), channel_shuffle=True, device=None)
 t.state_dict()
-t.cuda(0)
-t.num_enum = t.num_enum.to("cuda")
+t.cuda(1)
+t.num_enum
 
+x = torch.randn(20, 1, 512, device="cuda:1")
+y = torch.randn(20, 128, 128, device="cuda:1")
+cls_ = torch.tensor([[i] for i in range(1, 21)], device="cuda:1")
+optimizer = torch.optim.SGD(t.parameters(), lr=0.001, momentum=0.9)
 
-x = torch.randn(2, 1, 512, device="cuda:0")
-cls_ = torch.tensor([1, 2], device="cuda:0")
-t.train()
+loss = torch.nn.MSELoss()
+
 t([x, cls_])
+
+import time
+
+a = time.time()
+for i in range(10000):
+    optimizer.zero_grad()
+    output = t([x, cls_])
+    loss_ = loss(output, y)
+    loss_.backward()
+    optimizer.step()
+    print(loss_.item(), i)
+b = time.time() - a
 
 
 class multi_head_attention(nn.Module):
