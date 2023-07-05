@@ -1,30 +1,20 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
+from layers import block, Upsampling
 
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "mps"
-    if torch.backends.mps.is_available()
-    else "cpu"
-)
-
-import layers
-from layers import block, Upsampling, layernorm
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class main_model(nn.Module):
     def __init__(
         self,
-        lags=512,
-        embedding_dim=48,
-        n_blocks=3,
-        pool_size=4,
-        dropout=0.3,
-        number_of_heads=3 * 4,
+        lags: int = 512,
+        embedding_dim: int = 64,
+        n_blocks: int = 10,
+        pool_size: int = 4,
+        number_of_heads=4,
         number_ts=25,
-        device=device,
     ):
         assert (
             lags / pool_size
@@ -38,7 +28,6 @@ class main_model(nn.Module):
                 block(
                     embedding_dim,
                     width=self.width,
-                    dropout=dropout,
                     n_heads=number_of_heads,
                 )
                 for _ in range(n_blocks)
@@ -49,8 +38,7 @@ class main_model(nn.Module):
             d_out=self.embedding_dim,
             pool_size=pool_size,
             num_of_ts=number_ts,
-            att_heads=number_of_heads,
-            device=device,
+            conv_activation=F.gelu,
         )
         ###
 
@@ -59,3 +47,17 @@ class main_model(nn.Module):
         for layer in self.blocks:
             x = layer(x)
         return x
+
+
+t = main_model()
+t.cuda(1)
+torch.set_float32_matmul_precision("high")
+t.state_dict()
+# t = torch.compile(m)
+
+x = torch.randn(5, 1, 512, device="cuda:1")
+y = torch.randn(5, 1, 128, device="cuda:1")
+embedding = torch.tensor([[1] for i in range(5)], device="cuda:1")
+
+optimizer = torch.optim.SGD(t.parameters(), lr=0.01, momentum=0.9)
+t(x, embedding).mean(1, keepdims=True)

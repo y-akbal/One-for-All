@@ -135,7 +135,7 @@ class Upsampling(nn.Module):
             bias=conv_bias,
         )
         self.conv_activation = (
-            conv_activation if not conv_activation else torch.nn.Identity()
+            conv_activation if conv_activation != None else torch.nn.Identity()
         )
         ## Normalization layer
         self.normalization = layernorm(self.num_pools)
@@ -220,6 +220,9 @@ class Upsampling(nn.Module):
         final_linear = self.linear(dense_applied)  # BxHxW-> BxHxW
         return final_linear
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
+
+
+Upsampling(conv_activation=F.gelu)([torch.randn(1, 1, 512), torch.tensor([[1]])])
 
 
 class multi_head_attention(nn.Module):
@@ -331,29 +334,3 @@ class block(nn.Module):
         x = self.FFN(x)
         x += y  ## Residual Connection
         return x
-
-
-t = block()
-t.state_dict()
-t.cuda(0)
-
-x = torch.randn(20, 128, 128, device="cuda:0")
-y = torch.randn(20, 128, 128, device="cuda:0")
-
-optimizer = torch.optim.SGD(t.parameters(), lr=0.001, momentum=0.9)
-
-loss = torch.nn.MSELoss()
-torch._dynamo.config.verbose = True
-t(x)
-
-import time
-
-a = time.time()
-for i in range(10000):
-    optimizer.zero_grad()
-    output = t(x)
-    loss_ = loss(output, y)
-    loss_.backward()
-    optimizer.step()
-    print(loss_.item(), i)
-b = time.time() - a
