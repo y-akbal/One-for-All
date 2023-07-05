@@ -9,6 +9,7 @@ import torch.nn.functional as F
 #### H refers to population of lags via layers
 #### On time permitting https://pytorch.org/docs/stable/nn.init.html
 ### Look at the above initializations as He initialization may sound better, for the first layers
+## If possible do torch.compile(model), things go brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
 
 
 class Linear(
@@ -146,11 +147,14 @@ class Upsampling(nn.Module):
         self.linear = Linear(d_out, d_out, bias=True, dropout=dropout_linear)
 
         ## -- Begining of Embedding Layers -- ##
-        self.num_enum = torch.tensor(
+        """
+                self.num_enum = torch.tensor(
             [i for i in range(self.num_pools)],
             dtype=torch.int,
             requires_grad=False,
         )
+        
+        """
         self.register_buffer(
             "num_enum",
             torch.tensor(
@@ -218,33 +222,6 @@ class Upsampling(nn.Module):
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
 
 
-t = Upsampling(conv_activation=nn.GELU(), channel_shuffle=True, device=None)
-t.state_dict()
-t.cuda(1)
-t.num_enum
-
-x = torch.randn(20, 1, 512, device="cuda:1")
-y = torch.randn(20, 128, 128, device="cuda:1")
-cls_ = torch.tensor([[i] for i in range(1, 21)], device="cuda:1")
-optimizer = torch.optim.SGD(t.parameters(), lr=0.001, momentum=0.9)
-
-loss = torch.nn.MSELoss()
-
-t([x, cls_])
-
-import time
-
-a = time.time()
-for i in range(10000):
-    optimizer.zero_grad()
-    output = t([x, cls_])
-    loss_ = loss(output, y)
-    loss_.backward()
-    optimizer.step()
-    print(loss_.item(), i)
-b = time.time() - a
-
-
 class multi_head_attention(nn.Module):
     def __init__(self, embedding_dim=128, heads=4, lag=512, dropout=0.2, causal=True):
         super().__init__()
@@ -283,11 +260,10 @@ class multi_head_attention(nn.Module):
 
         ### Attenting to Future ###
         if self.causal:
-            self.causal_factor = nn.Parameter(
-                torch.tril(-torch.inf * torch.ones(self.W, self.W), diagonal=-1)
+            self.register_buffer(
+                "causal_factor",
+                torch.tril(-torch.inf * torch.ones(self.W, self.W), diagonal=-1),
             )
-            ## This dude will not be affected by gradient updates ---
-            self.causal_factor.requires_grad = False
 
     def forward(self, x, return_scores=False):  # BxHxL -> BxHxL
         K, Q, V = x[0], x[1], x[2]
@@ -357,10 +333,27 @@ class block(nn.Module):
         return x
 
 
-block()
+t = block()
+t.state_dict()
+t.cuda(0)
 
-L = nn.Sequential(Upsampling(), block(), block())
-L.cuda("cuda")
-t = Upsampling()
-t.cuda()
-t([torch.randn(1, 1, 512, device="cuda"), torch.tensor([1], device="cuda")])
+x = torch.randn(20, 128, 128, device="cuda:0")
+y = torch.randn(20, 128, 128, device="cuda:0")
+
+optimizer = torch.optim.SGD(t.parameters(), lr=0.001, momentum=0.9)
+
+loss = torch.nn.MSELoss()
+torch._dynamo.config.verbose = True
+t(x)
+
+import time
+
+a = time.time()
+for i in range(10000):
+    optimizer.zero_grad()
+    output = t(x)
+    loss_ = loss(output, y)
+    loss_.backward()
+    optimizer.step()
+    print(loss_.item(), i)
+b = time.time() - a
