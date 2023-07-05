@@ -23,15 +23,15 @@ class main_model(nn.Module):
         self.width = lags // pool_size
         self.embedding_dim = embedding_dim
         ###
-        self.blocks = nn.ModuleList(
-            [
+        self.blocks = nn.Sequential(
+            *(
                 block(
                     embedding_dim,
                     width=self.width,
                     n_heads=number_of_heads,
                 )
                 for _ in range(n_blocks)
-            ]
+            )
         )
         self.up_sampling = Upsampling(
             lags=lags,
