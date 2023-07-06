@@ -3,6 +3,8 @@ from torch import nn as nn
 from torch.nn import functional as F
 from layers import block, Upsampling, Linear
 from torch.utils.data import DataLoader, Dataset
+import tqdm
+from tqdm import tqdm
 
 ## This is important in the case that you compile the model!!!!
 torch.set_float32_matmul_precision("high")
@@ -70,18 +72,17 @@ class main_model(nn.Module):
 
 
 torch.manual_seed(0)
-t = main_model(num_of_clusters=5, number_ts=10)
-t.cuda("cuda:0")
+t = main_model(num_of_clusters=5, number_ts=10, embedding_dim=128)
+t.cuda("cuda:1")
 t.state_dict()
-# t = torch.compile(m)
 # t((torch.randn(1, 1, 512), torch.tensor([[2]]), torch.tensor([[3]])))
 
 
 ## Fake dataset here we create to see if the model is doing good
 class fake_data(Dataset):
     def __init__(self):
-        self.x = torch.randn(5000, 1, 512)
-        self.y = torch.randn(5000, 1, 128)
+        self.x = torch.randn(150000, 1, 512)
+        self.y = torch.randn(150000, 1, 128)
 
     def __len__(self):
         return len(self.x)
@@ -99,14 +100,17 @@ class fake_data(Dataset):
 
 ####
 data = fake_data()
-train_dataloader = DataLoader(data, batch_size=64, shuffle=True)
+train_dataloader = DataLoader(data, batch_size=256, shuffle=True)
 optimizer = torch.optim.SGD(t.parameters(), lr=0.00001, momentum=0.9)
+
+import time
 
 for i in range(1000):
     temp_loss = 0.1
     counter = 0
-    for x, y, tse, cls in train_dataloader:
-        x, y, tse, cls = map(lambda x: x.to("cuda:0"), [x, y, tse, cls])
+    a = time.time()
+    for i, (x, y, tse, cls) in enumerate(train_dataloader):
+        x, y, tse, cls = map(lambda x: x.to("cuda:1"), [x, y, tse, cls])
         output = t((x, tse, cls))
         optimizer.zero_grad()
         loss = nn.MSELoss()(output, y)
@@ -115,5 +119,9 @@ for i in range(1000):
         ### mean loss calculation ###
         counter += 1
         temp_loss -= (temp_loss - loss.item()) / counter
+        if i % 20 == 0:
+            print(i)
 
-    print(f"The loss is {temp_loss} and epoch {i}")
+    print(
+        f"The loss is {temp_loss:0.2f} and epoch {i}, {time.time() - a}   seconds to pass"
+    )

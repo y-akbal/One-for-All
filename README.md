@@ -11,6 +11,6 @@ Things to do:
   6) train_details.py - probably training such a huge model will take a lot of time, therefore we may need to parallelize training process. This file will contain some functions to achieve this.
   
   
-### Final update: Hope we are coming to the end of this story, since the model is trained on fake data succesfully...
+
 
 
