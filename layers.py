@@ -145,16 +145,7 @@ class Upsampling(nn.Module):
         )
         ## Linear Layer
         self.linear = Linear(d_out, d_out, bias=True, dropout=dropout_linear)
-
-        ## -- Begining of Embedding Layers -- ##
-        """
-                self.num_enum = torch.tensor(
-            [i for i in range(self.num_pools)],
-            dtype=torch.int,
-            requires_grad=False,
-        )
-        
-        """
+        ### Embedding enumeration
         self.register_buffer(
             "num_enum",
             torch.tensor(

@@ -9,7 +9,6 @@ import time
 
 ## This is important in the case that you compile the model!!!!
 torch.set_float32_matmul_precision("high")
-
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -74,9 +73,8 @@ class main_model(nn.Module):
 
 torch.manual_seed(0)
 t = main_model(number_ts=264, embedding_dim=256)
-t.cuda("cuda:1")
-t.state_dict()
-
+t = t.cuda(1)
+t = torch.compile(t)
 # t((torch.randn(1, 1, 512, device = "cuda:1"), torch.tensor([[2]], device = "cuda:1")))
 memmap_data = np.memmap("array.dat", dtype=np.float32)
 memmap_lengths = np.memmap("lengthsarray.dat", dtype=np.int32)
@@ -103,9 +101,14 @@ class real_data(Dataset):
 data_ = real_data()
 
 train_dataloader = DataLoader(data_, batch_size=256, shuffle=True)
-optimizer = torch.optim.AdamW(t.parameters(), lr=0.0001)
+optimizer = torch.optim.SGD(t.parameters(), lr=0.0001)
 
-t.eval()
+
+autocast = torch.autocast
+scaler = torch.cuda.amp.GradScaler()
+# Creates a GradScaler once at the beginning of training.
+
+
 for j in range(5):
     temp_loss = 0.1
     counter = 0
@@ -113,13 +116,18 @@ for j in range(5):
 
     for i, (x, y, tse) in enumerate(train_dataloader):
         m = time.time()
-        x, y, tse = map(lambda x: x.to("cuda:1").unsqueeze(1), [x, y, tse])
+        x, y, tse = map(lambda x: x.cuda(1).unsqueeze(1), [x, y, tse])
+        with autocast(device_type="cuda", dtype=torch.bfloat16):
+            output = t((x, tse))
+            loss = nn.MSELoss()(output, y)
 
-        output = t((x, tse))
+        scaler.scale(loss).backward()
+
+        scaler.step(optimizer)
+
+        scaler.update()
         optimizer.zero_grad()
-        loss = nn.MSELoss()(output, y)
-        loss.backward()
-        optimizer.step()
+
         ### mean loss calculation ###
         counter += 1
         temp_loss -= (temp_loss - loss.item()) / counter
@@ -130,9 +138,9 @@ for j in range(5):
             )
     ### One batch takes at most 0.31 seconds with size 256 -- this number is the same as picking a batch from random array
     ### so no bottleneck in the pipeline!!!!
-    ### If we do not compile the model then it takes .47 seconds to pass a batch!!!!
-    ### 12773226/256 = 49896 batches, therefore one epoch will take 49896*0.32/60 = 266 minutes, therefore one epoch will take
-    ### 4.4 hours which is good I believe. torch.compile saves %35 accelation.
+    ### If we do not compile the model then it takes .47 (if you do so .32 seconds on A2000 gpu (a bit less on 3060)) seconds to pass a batch!!!!
+    ### 12773226/256 = 49896 batches, therefore one epoch will take 49896*0.32/60 = 266 (float32) minutes (182.95 in mixed precision)
+    ### therefore one epoch will take 4.4 hours (3 hours mixed precision) which is good I believe. torch.compile saves %35 accelation.
     print(
         f"The loss is {temp_loss:0.2f} and epoch {j}, {time.time() - a}   seconds to pass"
     )

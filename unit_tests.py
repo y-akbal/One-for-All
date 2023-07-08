@@ -41,6 +41,13 @@ class model_test(ABC):  # This is called abstract base class
         return lay
 
     @abstractmethod
+    def param_sizes(self):
+        # Print model's state_dict
+        print("Model's state_dict:")
+        for param_tensor in self.model.state_dict():
+            print(param_tensor, "\t", self.model.state_dict()[param_tensor].size())
+
+    @abstractmethod
     def write_log(self, message: str):
         """_summary_
         The idea is to get intermediate reports and possible errors to see in a txt file
