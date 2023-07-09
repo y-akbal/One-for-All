@@ -213,9 +213,6 @@ class Upsampling(nn.Module):
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
 
 
-Upsampling(conv_activation=F.gelu)([torch.randn(1, 1, 512), torch.tensor([[1]])])
-
-
 class multi_head_attention(nn.Module):
     def __init__(self, embedding_dim=128, heads=4, lag=512, dropout=0.2, causal=True):
         super().__init__()
@@ -325,3 +322,7 @@ class block(nn.Module):
         x = self.FFN(x)
         x += y  ## Residual Connection
         return x
+
+
+if __name__ == "__main__":
+    pass

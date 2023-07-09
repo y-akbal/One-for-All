@@ -72,15 +72,19 @@ class main_model(nn.Module):
 
 
 torch.manual_seed(0)
-t = main_model(number_ts=264, embedding_dim=256)
+t = main_model(number_ts=264, embedding_dim=512, n_blocks=15)
 t = t.cuda(1)
-t = torch.compile(t)
+# t = torch.compile(t)
 # t((torch.randn(1, 1, 512, device = "cuda:1"), torch.tensor([[2]], device = "cuda:1")))
 memmap_data = np.memmap("array.dat", dtype=np.float32)
 memmap_lengths = np.memmap("lengthsarray.dat", dtype=np.int32)
 lags = [513 for _ in memmap_lengths]
 
 data = ts_concatted(array=memmap_data, lengths=memmap_lengths, lags=lags)
+q = 0
+for weight, values in t.state_dict().items():
+    q += np.array(values.cpu().numpy().shape).prod()
+q
 
 
 ## Fake dataset here we create to see if the model is doing good
@@ -100,8 +104,8 @@ class real_data(Dataset):
 ####
 data_ = real_data()
 
-train_dataloader = DataLoader(data_, batch_size=256, shuffle=True)
-optimizer = torch.optim.SGD(t.parameters(), lr=0.0001)
+train_dataloader = DataLoader(data_, batch_size=64, shuffle=True)
+optimizer = torch.optim.SGD(t.parameters(), lr=0.001)
 
 
 autocast = torch.autocast
@@ -144,3 +148,5 @@ for j in range(5):
     print(
         f"The loss is {temp_loss:0.2f} and epoch {j}, {time.time() - a}   seconds to pass"
     )
+
+torch.save(t.state_dict(), "model_on_train.trc")
