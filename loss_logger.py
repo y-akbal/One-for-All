@@ -4,12 +4,9 @@ import os
 
 class loss_track:
     """
-    summary: A class to keep track the loss of the training process,
-    probably I will pickle the array keeping track of the loss list.
-
     Things will work as follows: 
 
-    look at loss for an individual batch, update the weights
+    Look at loss for an individual batch, update the weights
     update rolling loss, using self.update(loss) update rolling mean loss and
     variance, if you are done with final batch, call self.reset(),
     this will reset parameters, and flush the loss into a pickled file.
@@ -22,13 +19,14 @@ class loss_track:
                  "loss_var_hist":self._lossvar_hist,
                  "num_epochs": self.num_epochs
                  }
+    
     As we do not plan to pass a lot of epochs, we may be interested in variance and rolling mean,
     you can simply write a simple script to pick of mean loss, for each epoch. 
     In the case that you need rolling loss to print, call self.loss. This will return a tuple
-    mean and variance in the epoch.
+    mean and variance in the epoch. 
     """
 
-    def __init__(self, file_name:str ="loss_logger.log") -> None:
+    def __init__(self, file_name:str ="loss.log") -> None:
         ## File name for logging loss logs ##
         self.file_name = file_name
         ## --------------- ##
@@ -53,8 +51,9 @@ class loss_track:
 
     def update(self, loss:float)-> None:
         ## update mean loss and variance loss ##
-        self._temploss -= (self._temploss - loss) / (self.counter + 1)
-        self._tempvar -= (self._tempvar/(self.counter+1) - ((loss - self._temploss)**2)/(self.counter))
+        difference = (self._temploss - loss) / (self.counter + 1)
+        self._temploss -= difference # to be used to update the variance
+        self._tempvar = ((self.counter-1)/self.counter)*(self._tempvar) + ((loss - self._temploss)**2)/(self.counter)+(difference)**2
         ## append the real losses for future analysis
         self._loss_hist.append(self._temploss)
         self._lossvar_hist.append(self._tempvar)
@@ -62,16 +61,14 @@ class loss_track:
         self.counter += 1
 
     def reset(self)-> None:
+        self.num_epochs += 1
+        self.__flush__()
         ### we reset all variables ###
         self._temploss = 1e-10
         self._tempvar = 1e-10
         self.counter = 1
-        self.mean_loss = []
-        self.var_loss = []
         ### update the number of epochs passed
-        self.__flush__()
-        self.num_epochs += 1
-
+        
 
     def __flush__(self) -> None:
         dict_ = {"mean_loss":self._temploss, 
@@ -81,7 +78,7 @@ class loss_track:
                  "num_epochs": self.num_epochs
                  }
         num = self.num_epochs
-        with open(f"{num}"+self.file_name, mode = "ab") as file:
+        with open(f"{num}_epoch"+self.file_name, mode = "ab") as file:
             pickle.dump(dict_, file)
 
     @property
@@ -91,8 +88,6 @@ class loss_track:
     @loss.getter
     def loss(self) -> tuple:
         return self._temploss, self._tempvar
-
-
 
 if __name__ == "__main__":
     pass
