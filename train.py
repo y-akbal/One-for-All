@@ -5,20 +5,22 @@
 ### Maybe abit accumulation gradients so forth so on!!!
 ### Adjust learning rate, maybe a bit weight decay would be needed
 ### Take snapshots some number of times, or after some callbacks.....
-
+import os
 import torch
 import torch.nn.functional as F
-import os
-from torch.utils.data import Dataset, DataLoader
-import pickle
-
-# from datautils import MyTrainDataset
-
 import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
-import os
+from torch.utils.data import Dataset, DataLoader
+from loss_logger import loss_track
+import pickle
+
+
+
+## This is important in the case that you compile the model!!!!
+torch.set_float32_matmul_precision("high")
+### 
 
 
 def ddp_setup(rank, world_size):
@@ -33,46 +35,6 @@ def ddp_setup(rank, world_size):
     torch.cuda.set_device(rank)
 
 
-class loss_track:
-    """
-    summary: A class to keep track the loss of the training process,
-    probably I will pickle the list keeping track of the loss list.
-    """
-
-    def __init__(self, file_name="logger.log"):
-        ## File name for logging loss logs ##
-        self.file_name = file_name
-        ## --------------- ##
-        self.__temp_loss__ = 1e-10
-        self.counter = 1
-        L = []
-
-    def update(self, loss):
-        self.__temp_loss__ -= (self.__temp_loss__ - loss) / (self.counter + 1)
-        self.counter += 1
-
-    def reset(self):
-        self.__temp_loss__ = 1e-10
-        self.counter = 1
-
-    @property
-    def loss(self):
-        return self.__temp_loss__
-
-    @loss.getter
-    def loss(self):
-        return self.__temp_loss__
-
-    @loss.setter
-    def loss(self, value):
-        self.__temp_loss__ = value
-
-    def load(self):
-        pass
-
-    def save(Self):
-        pass
-
 
 ## We grabbed this from the official pytorch github repository.
 class Trainer:
@@ -80,20 +42,24 @@ class Trainer:
         self,
         model: torch.nn.Module,
         train_data: DataLoader,
+#       test_data: DataLoader,
         optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.Scheduler,
         gpu_id: int,
         save_every: int,
+        loss_logger = loss_track(),
+        #tracker ## this dude is for tracking stuff
     ) -> None:
         self.gpu_id = gpu_id
         self.model = model.to(gpu_id)
+        self.tracker = loss_logger
         self.train_data = train_data
+        #self.test_data = test_data
         self.optimizer = optimizer
+        self.scheduler = scheduler
         self.save_every = save_every
         self.model = DDP(model, device_ids=[gpu_id])
-        ### To keep track of the local loss
-        if gpu_id == 0:
-            self.local_loss = 1e-2
-            self.counter = 1
+        
 
     def _run_batch(self, source, targets):
         self.optimizer.zero_grad()
@@ -101,10 +67,10 @@ class Trainer:
         loss = F.mse_loss(output, targets)
         loss.backward()
         self.optimizer.step()
-
+        ### We log the loss, 
         if self.gpu_id == 0:
-            self.local_loss -= (self.local_loss - loss.item()) / self.counter
-            self.counter += 1
+            loss_ = loss.item()
+            self.tracker.update(loss_)
 
     def _run_epoch(self, epoch):
         b_sz = len(next(iter(self.train_data))[0])
@@ -129,11 +95,10 @@ class Trainer:
             if self.gpu_id == 0 and epoch % self.save_every == 0:
                 self._save_checkpoint(epoch)
             if self.gpu_id == 0:
-                print(self.local_loss)
-
+                
 
 def load_train_objs():
-    train_set = MyTrainDataset(20480)  # load your dataset
+    train_set = torch.rand(10,10)
     model = nn.Sequential(
         torch.nn.Linear(500, 300),
         torch.nn.GELU(),
@@ -170,7 +135,7 @@ def main(
 
 if __name__ == "__main__":
     import argparse
-
+    
     parser = argparse.ArgumentParser(description="simple distributed training job")
     parser.add_argument(
         "total_epochs", type=int, help="Total epochs to train the model"

@@ -72,26 +72,52 @@ class main_model(nn.Module):
 
 
 torch.manual_seed(0)
-t = main_model(number_ts=264, embedding_dim=512, n_blocks=12)
+t = main_model(number_ts=264, embedding_dim=512, n_blocks=15)
 t = t.cuda(1)
-t = torch.compile(t)
-# t((torch.randn(1, 1, 512, device="cuda:1"), torch.tensor([[2]], device="cuda:1")))
+# t = torch.compile(t)
+t((torch.randn(1, 1, 512, device = "cuda:1"), torch.tensor([[2]], device = "cuda:1")))
 
 
-memmap_data = np.memmap("array_train.dat", dtype=np.float32)
-memmap_lengths = np.memmap("lengthsarray_train.dat", dtype=np.int32)
+memmap_data = np.memmap("array.dat", dtype=np.float32)
+memmap_lengths = np.memmap("lengthsarray.dat", dtype=np.int32)
 lags = [513 for _ in memmap_lengths]
 
 data = ts_concatted(array=memmap_data, lengths=memmap_lengths, lags=lags)
+q = 0
+for weight, values in t.state_dict().items():
+    q += np.array(values.cpu().numpy().shape).prod()
+q
 
-train_dataloader = DataLoader(data, batch_size=128, shuffle=True, num_workers=4)
-optimizer = torch.optim.SGD(t.parameters(), lr=0.0001)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15)
+
+## Fake dataset here we create to see if the model is doing good
+class real_data(Dataset):
+    def __init__(self):
+        self.data = data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, i):
+        X_lags, X_next, token = self.data[i]
+
+        return X_lags, X_next, token
+
+
+####
+data_ = real_data()
+
+train_dataloader = DataLoader(data_, batch_size=64, shuffle=True)
+optimizer = torch.optim.AdamW(t.parameters(), lr=0.0001)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = 15)
+
 
 
 autocast = torch.autocast
 scaler = torch.cuda.amp.GradScaler()
 # Creates a GradScaler once at the beginning of training.
+
+
+
 
 
 for j in range(5):
@@ -102,17 +128,18 @@ for j in range(5):
     for i, (x, y, tse) in enumerate(train_dataloader):
         m = time.time()
         x, y, tse = map(lambda x: x.cuda(1).unsqueeze(1), [x, y, tse])
-        loss = torch.tensor([0], dtype=torch.bfloat16).cuda(1)
-
         with autocast(device_type="cuda", dtype=torch.bfloat16):
             output = t((x, tse))
-            loss += nn.MSELoss()(output, y)
-        if i % 3 == 0 and i > 1:
-            scaler.scale(loss / 3).backward()
-            scaler.step(optimizer)
-            scheduler.step()
-            scaler.update()
-            optimizer.zero_grad()
+            loss = nn.MSELoss()(output, y)
+
+        scaler.scale(loss).backward()
+
+        scaler.step(optimizer)
+        scheduler.step()
+        
+        
+        scaler.update()
+        optimizer.zero_grad()
 
         ### mean loss calculation ###
         counter += 1
@@ -130,5 +157,5 @@ for j in range(5):
     print(
         f"The loss is {temp_loss:0.2f} and epoch {j}, {time.time() - a}   seconds to pass,"
     )
-    torch.save(t.state_dict(), "model_on_train.trc")
-    torch.save(optimizer.state_dict(), "model_on_train.trc")
+
+#torch.save(t.state_dict(), "model_on_train.trc")

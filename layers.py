@@ -3,6 +3,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 from torch.nn.parameter import Parameter
 import torch.nn.functional as F
+import time
 
 
 #### Convention here we use: BxHxW ---- W here refers to the lags of the time series,
@@ -17,40 +18,50 @@ class Linear(
 ):  ## B*H*W -> B*H'*W adjusted the columns in each batch, no touch to rows directly
     ## This layer just mixes H, no touch to lags
     ### Motivated by Pytorch original Linear Layer
-    def __init__(self, d_in, d_out, bias=False, dropout=0.1, device=None, dtype=None):
+    ### BTW if we had the information of static shapes, then we would change the order of multiplication
+    ## To further
+    def __init__(self, d_in, d_out, bias=False, device=None, dtype=None, dropout=0.1):
         kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.M = Parameter(
-            torch.randn(d_out, d_in, requires_grad=True, **kwargs)
+            torch.randn(d_in, d_out, requires_grad=True, **kwargs)
             * ((d_in + d_out) / 2) ** (-0.5)
         )  # Kaiming init
         self.bias = bias
         if self.bias:
-            self.b = Parameter(torch.zeros(d_out, 1, requires_grad=True, **kwargs))
-
-        self.dropout = nn.Dropout(dropout, inplace=False)
+            self.b = Parameter(
+                # torch.zeros(d_out, requires_grad=True, dtype=torch.float32)
+                torch.randn(d_out, requires_grad=True, **kwargs)
+                / d_out**2
+            )
+        ## Let's do some functional stuff
+        self.bias_f = lambda x: x + self.b if self.bias else x
+        if dropout > 0:
+            self.dropout = nn.Dropout(dropout, inplace=False)
+        else:
+            self.dropout = lambda x: x
 
     def forward(self, x):  # Bxd_inxW -> Bxd_outxW
-        x = self.dropout(x)  ## apply dropout!!!
-        res = self.M @ x
-        if self.bias:
-            res += self.b
-        return res
+        ### changed the order and saved some time
+        ### because CUDA likes it!!!
+        x = self.dropout(x)
+        res = x.transpose(-1, -2) @ self.M
+        res = self.bias_f(res)
+        return res.transpose(-1, -2)
 
 
 class FFN(nn.Module):
     def __init__(
         self, d_in, expansion_size=2, dropout=0.2, activation=nn.ReLU(), bias=True
     ) -> None:
-        assert expansion_size > 1, "You must have an expansion size greater than one"
-        assert isinstance(expansion_size, int), "Expansion size must be an integer"
-        ### This dude is FFN part as given in the all you need paper, we use nn.ReLU, we may
-        ## change this later, depending on needs.
+        assert d_in * expansion_size > 1, "Do not squeeze too much buddy!!!!"
+        d_temp_out = int(d_in * expansion_size)
+        ### This dude is FFN part as given in the all you need paper, we use nn.ReLU, as we may.
         super().__init__()
         self.linear = nn.Sequential(
-            Linear(d_in=d_in, d_out=expansion_size * d_in, dropout=dropout, bias=bias),
+            Linear(d_in=d_in, d_out=d_temp_out, dropout=dropout, bias=bias),
             activation,
-            Linear(d_in=expansion_size * d_in, d_out=d_in, dropout=dropout, bias=bias),
+            Linear(d_in=d_temp_out, d_out=d_in, dropout=dropout, bias=bias),
         )
 
     def forward(self, x):
@@ -58,7 +69,7 @@ class FFN(nn.Module):
 
 
 class layernorm(nn.Module):
-    # We noemalize the local copies not along time dimension
+    # We normalize the local copies not along time dimension
     ## standard layer norm guy, horoko!!!
     def __init__(self, dim, eps=1e-5):
         super().__init__()
