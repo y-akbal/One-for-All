@@ -36,13 +36,23 @@ class loss_track:
         ## --------------- ##
         ## We do not just keep track the mean loss
         ## but also standard deviation along the batches
-        self._temploss = 1e-10
-        self._tempvar = 1e-10
+        self._trainloss = 1e-10
+        self._trainvar = 1e-10
         ##
-        self._loss_hist = [self._temploss]
-        self._lossvar_hist = [self._tempvar]
+        self._testloss = 1e-10
+        self._testvar = 1e-10
+
+        ## history »»
+        self.train_loss_hist = [self._trainloss]
+        self.train_loss_var_hist = [self._trainvar]
+
+        self.test_loss_hist = [self._testloss]
+        self.test_loss_var_hist = [self._testvar]
+
         ## counters for rolling mean and variance ##
-        self.counter = 1
+        self.train_counter = 1
+        self.test_counter = 1
+        ### epochs
         self.num_epochs = 0
 
         if not os.path.isfile(file_name):
@@ -51,38 +61,55 @@ class loss_track:
             except Exception as e:
                 print(e)
 
-    def update(self, loss: float) -> None:
+    def update_train(self, loss: float) -> None:
         ## update mean loss and variance loss ##
-        difference = (self._temploss - loss) / (self.counter + 1)
-        self._temploss -= difference  # to be used to update the variance
-        self._tempvar = (
-            ((self.counter - 1) / self.counter) * (self._tempvar)
-            + ((loss - self._temploss) ** 2) / (self.counter)
+        difference = (self._trainloss - loss) / (self.train_counter + 1)
+        self._trainloss -= difference  # to be used to update the variance
+        self._trainvar = (
+            ((self.train_counter - 1) / self.train_counter) * (self._trainvar)
+            + ((loss - self._trainloss) ** 2) / (self.train_counter)
             + (difference) ** 2
         )
         ## append the real losses for future analysis
-        self._loss_hist.append(self._temploss)
-        self._lossvar_hist.append(self._tempvar)
+        self.train_loss_hist.append(self._trainloss)
+        self.train_loss_var_hist.append(self._trainvar)
         ## update the counter
-        self.counter += 1
+        self.train_counter += 1
+
+    def update_test(self, loss: float) -> None:
+        difference = (self._testloss - loss) / (self.test_counter + 1)
+        self._testloss -= difference  # to be used to update the variance
+        self._testvar = (
+            ((self.test_counter - 1) / self.test_counter) * (self._testvar)
+            + ((loss - self._testloss) ** 2) / (self.test_counter)
+            + (difference) ** 2
+        )
+        ## append the real losses for future analysis
+        self.test_loss_hist.append(self._testloss)
+        self.test_loss_var_hist.append(self._testvar)
+        ## update the counter
+        self.test_counter += 1
 
     def reset(self) -> None:
+        ### update the number of epochs passed
         self.num_epochs += 1
         self.__flush__()
-        ### we reset all variables ###
-        self._temploss = 1e-10
-        self._tempvar = 1e-10
-        self.counter = 1
-        ### update the number of epochs passed
+        ## -- ##
+        self.train_counter = 1
+        self.test_counter = 1
 
     def __flush__(self) -> None:
         dict_ = {
             "project_name": self.project_name,
-            "mean_loss": self._temploss,
-            "var_loss": self._tempvar,
-            "loss_hist": self._loss_hist,
-            "loss_var_hist": self._lossvar_hist,
             "num_epochs": self.num_epochs,
+            "train_mean_loss": self._trainloss,
+            "train_loss_variance": self._trainvar,
+            "train_loss_hist": self.train_loss_hist,
+            "train_loss_var_hist": self.train_loss_var_hist,
+            "test_mean_loss": self._testloss,
+            "test_loss_variance": self._testvar,
+            "test_loss_hist": self.test_loss_hist,
+            "test_loss_var_hist": self.test_loss_var_hist,
         }
         num = self.num_epochs
         with open(f"{num}_epoch" + self.file_name, mode="ab") as file:
@@ -90,11 +117,12 @@ class loss_track:
 
     @property
     def loss(self) -> tuple:
-        return self._temploss, self._tempvar
-
-    @loss.getter
-    def loss(self) -> tuple:
-        return self._temploss, self._tempvar
+        return {
+            "train_loss": self._trainloss,
+            "train_variance": self._trainvar,
+            "test_loss": self._testloss,
+            "test_variance": self._testvar,
+        }
 
 
 if __name__ == "__main__":

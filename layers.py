@@ -5,7 +5,6 @@ from torch.nn.parameter import Parameter
 import torch.nn.functional as F
 import time
 
-
 #### Convention here we use: BxHxW ---- W here refers to the lags of the time series,
 #### H refers to population of lags via layers
 #### On time permitting https://pytorch.org/docs/stable/nn.init.html
@@ -59,7 +58,7 @@ class FFN(nn.Module):
         ### This dude is FFN part as given in the all you need paper, we use nn.ReLU, as we may.
         super().__init__()
         self.linear = nn.Sequential(
-            Linear(d_in=d_in, d_out=d_temp_out, dropout=dropout, bias=bias),
+            Linear(d_in=d_in, d_out=d_temp_out, dropout=0, bias=bias),
             activation,
             Linear(d_in=d_temp_out, d_out=d_in, dropout=dropout, bias=bias),
         )
@@ -71,11 +70,14 @@ class FFN(nn.Module):
 class layernorm(nn.Module):
     # We normalize the local copies not along time dimension
     ## standard layer norm guy, horoko!!!
-    def __init__(self, dim, eps=1e-5):
+    ## We are closely approaching real Pytorch's implementation
+    ## This layer seems to beat Pytorch's default layer norm with transpose
+    ## If the layer is compiled.
+    def __init__(self, dim, eps=1e-5, **kwargs):
         super().__init__()
         self.eps = eps
-        self.gamma = nn.Parameter(torch.ones(dim, requires_grad=True))
-        self.beta = nn.Parameter(torch.zeros(dim, requires_grad=True))
+        self.gamma = nn.Parameter(torch.ones((dim), requires_grad=True, **kwargs))
+        self.beta = nn.Parameter(torch.zeros((dim), requires_grad=True, **kwargs))
 
     def forward(self, x):
         mean = x.mean(1, keepdims=True)
@@ -83,14 +85,12 @@ class layernorm(nn.Module):
         unit = (x - mean) / torch.sqrt(self.eps + var)
         return self.gamma * unit + self.beta  ### B*H*W -> B*H*W
 
-    def parameters(self):
-        return [self.gamma, self.beta]
-
 
 def channel_shuffleF(x, groups):
     ## Grabbed this from https://github.com/jaxony/ShuffleNet/blob/master/model.py
     ## Asdjusted properly
-    batchsize, height, width = x.data.size()
+    ## Do not know, why the hell we have this layer though, it serves some purpose I believe,
+    batchsize, height, width = x.shape
 
     channels_per_group = height // groups
 
@@ -177,9 +177,11 @@ class Upsampling(nn.Module):
             self.cls_embedding = nn.Embedding(num_of_clusters, d_out)
         ## -- End of Embedding Layers -- ##
 
-        ## channle shuffling ##
-        if self.channel_shuffle:
-            self.shuffle = lambda x: channel_shuffleF(x, channel_shuffle_group)
+        self.shuffle = (
+            lambda x: channel_shuffleF(x, channel_shuffle_group)
+            if self.channel_shuffle
+            else x
+        )
 
     def forward(self, x: tuple) -> torch.Tensor:
         if self.num_of_clusters != None:
@@ -202,8 +204,8 @@ class Upsampling(nn.Module):
         normalized = self.normalization(activated)  # BxHxW -> BxHxW
 
         ###
-        if self.channel_shuffle:
-            normalized = self.shuffle(normalized)
+        # if self.channel_shuffle:
+        normalized = self.shuffle(normalized)
 
         # BxHxW -> BxHxW (Dense layer is applied H dim)
         dense_applied = self.FFN(normalized)
@@ -225,6 +227,8 @@ class Upsampling(nn.Module):
 
 
 class multi_head_attention(nn.Module):
+    """This dude is a bit faster than the original"""
+
     def __init__(self, embedding_dim=128, heads=4, lag=512, dropout=0.2, causal=True):
         super().__init__()
 
@@ -235,62 +239,45 @@ class multi_head_attention(nn.Module):
         )
 
         self.embedding_dim = embedding_dim
+        self.linear = Linear(embedding_dim, 3 * embedding_dim)
         self.heads = heads
         self.causal = causal
-        self.W = lag  ### Here W stands for width
-        ### --- Attention Part --- ###
-        ## ------------------------####
-        ### Frist Dropout layers  ####
-        self.dropout_Q = nn.Dropout(p=dropout)
-        self.dropout_K = nn.Dropout(p=dropout)
-        self.dropout_V = nn.Dropout(p=dropout)
-        ### ----------------------####
-        ###  -----Weights ------ Xavier Reyizzzz was here!!!!! Istırırız ###
-        ### https://www.youtube.com/watch?v=kFmwBtlOLV8 ###
-        self.L_Q = nn.Parameter(
-            torch.randn(embedding_dim, embedding_dim) * (embedding_dim) ** (-0.5)
-        )
-        self.L_K = nn.Parameter(
-            torch.randn(embedding_dim, embedding_dim) * (embedding_dim) ** (-0.5)
-        )
-        self.L_V = nn.Parameter(
-            torch.randn(embedding_dim, embedding_dim) * (embedding_dim) ** (-0.5)
-        )
-        ### Final Linear Layer with no activation ###
+        self.W = lag  ### Here W stands for width (or lags)
+        self.Dropout = nn.Dropout(p=dropout)
+        ## output linear
         self.dense = Linear(embedding_dim, embedding_dim, bias=True)
-        ### --- End of weights --- ###
 
-        ### Attenting to Future ###
+        ### blocking attenting to Future ###
         if self.causal:
             self.register_buffer(
                 "causal_factor",
-                torch.tril(-torch.inf * torch.ones(self.W, self.W), diagonal=-1),
+                torch.tril(
+                    torch.ones(self.W, self.W, dtype=torch.bool),
+                    diagonal=-1,
+                ),
             )
 
-    def forward(self, x, return_scores=False):  # BxHxL -> BxHxL
-        K, Q, V = x[0], x[1], x[2]
+    def forward(self, x):  # BxHxL -> BxHxL
+        B, _, _ = x.shape
         ## Apply Dropout ##
-        K, Q, V = (
-            self.dropout_K(self.L_K @ K),
-            self.dropout_Q(self.L_Q @ Q),
-            self.dropout_V(self.L_V @ V),
-        )
-        # -- # Reshaoe the arrays
-        K_v, Q_v, V_v = (
-            K.view(-1, self.heads, int(self.embedding_dim / self.heads), self.W),
-            Q.view(-1, self.heads, int(self.embedding_dim / self.heads), self.W),
-            V.view(-1, self.heads, int(self.embedding_dim / self.heads), self.W),
-        )
-        ## Grab the attention scores
-        attention_scores = Q_v.transpose(-2, -1) @ K_v
-        if self.causal:
-            attention_scores += self.causal_factor
+        KQV = self.linear(x)
+        KQV = x.view(B, self.heads, int(self.embedding_dim / self.heads), self.W)
 
-        scores = nn.Softmax(-2)(attention_scores) * self.embedding_dim ** (-0.5)
-        attention_output = (V_v @ scores).view(-1, self.embedding_dim, self.W)
-        if return_scores:
-            return self.dense(attention_output), attention_scores, scores
-        return self.dense(attention_output)
+        attention_scores = KQV.transpose(-2, -1) @ KQV
+
+        if self.causal:
+            attention_scores = attention_scores.masked_fill(
+                self.causal_factor, -torch.inf
+            )
+        softmaxed_att = nn.Softmax(-2)(attention_scores * self.embedding_dim ** (-0.5))
+
+        t = KQV @ softmaxed_att
+        t = self.Dropout(
+            t,
+        )
+        t = t.view(B, self.embedding_dim, self.W)
+
+        return self.dense(t)
 
 
 class block(nn.Module):
@@ -327,7 +314,7 @@ class block(nn.Module):
 
     def forward(self, x):  # B*H*W -> B*H*W
         y = self.ln1(x)
-        y = self.att_head([y, y, y])
+        y = self.att_head(y)
         y += x  ## Residual connection
         x = self.ln2(y)
         x = self.FFN(x)
@@ -335,5 +322,39 @@ class block(nn.Module):
         return x
 
 
+"""
+torch.set_float32_matmul_precision("high")
+lay = block(n_heads=8)
+
+lay = nn.Sequential(*[lay for _ in range(10)]).cuda(0)
+lay.eval()
+
+
+x = torch.randn(100, 128, 128).cuda(0)
+import time
+
+a = time.time()
+torch.cuda.synchronize()
+for i in range(100):
+    q = lay(x)
+torch.cuda.synchronize()
+print(time.time() - a)
+
+
+lay_ = torch.nn.MultiheadAttention(128, 4).cuda()
+lay_.state_dict()
+y = x.transpose(-1, -2)
+y = y.cuda()
+
+import time
+
+a = time.time()
+torch.cuda.synchronize()
+for i in range(100):
+    q = lay_(y, y, y)
+torch.cuda.synchronize()
+print(time.time() - a)
+
+"""
 if __name__ == "__main__":
     pass

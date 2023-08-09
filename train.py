@@ -7,20 +7,21 @@
 ### Take snapshots some number of times, or after some callbacks.....
 import os
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 from torch.utils.data.distributed import DistributedSampler
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import Dataset, DataLoader
+from datautils import MyTrainDataset
 from loss_logger import loss_track
 import pickle
 
 
-
 ## This is important in the case that you compile the model!!!!
 torch.set_float32_matmul_precision("high")
-### 
+###
 
 
 def ddp_setup(rank, world_size):
@@ -35,31 +36,28 @@ def ddp_setup(rank, world_size):
     torch.cuda.set_device(rank)
 
 
-
 ## We grabbed this from the official pytorch github repository.
 class Trainer:
     def __init__(
         self,
         model: torch.nn.Module,
         train_data: DataLoader,
-#       test_data: DataLoader,
+        #       test_data: DataLoader,
         optimizer: torch.optim.Optimizer,
-        scheduler: torch.optim.Scheduler,
         gpu_id: int,
         save_every: int,
-        loss_logger = loss_track(),
-        #tracker ## this dude is for tracking stuff
+        loss_logger=loss_track(),
+        # tracker ## this dude is for tracking stuff
     ) -> None:
         self.gpu_id = gpu_id
         self.model = model.to(gpu_id)
         self.tracker = loss_logger
         self.train_data = train_data
-        #self.test_data = test_data
+        # self.test_data = test_data
         self.optimizer = optimizer
-        self.scheduler = scheduler
+        # self.scheduler = scheduler
         self.save_every = save_every
         self.model = DDP(model, device_ids=[gpu_id])
-        
 
     def _run_batch(self, source, targets):
         self.optimizer.zero_grad()
@@ -67,7 +65,7 @@ class Trainer:
         loss = F.mse_loss(output, targets)
         loss.backward()
         self.optimizer.step()
-        ### We log the loss, 
+        ### We log the loss,
         if self.gpu_id == 0:
             loss_ = loss.item()
             self.tracker.update(loss_)
@@ -82,6 +80,8 @@ class Trainer:
             source = source.to(self.gpu_id)
             targets = targets.to(self.gpu_id)
             self._run_batch(source, targets)
+        if self.gpu_id == 0:
+            self.tracker.reset()
 
     def _save_checkpoint(self, epoch):
         ckp = self.model.module.state_dict()
@@ -94,22 +94,27 @@ class Trainer:
             self._run_epoch(epoch)
             if self.gpu_id == 0 and epoch % self.save_every == 0:
                 self._save_checkpoint(epoch)
-            if self.gpu_id == 0:
-                
 
-def load_train_objs():
-    train_set = torch.rand(10,10)
-    model = nn.Sequential(
-        torch.nn.Linear(500, 300),
-        torch.nn.GELU(),
-        torch.nn.Linear(300, 300),
-        torch.nn.GELU(),
-        torch.nn.Linear(300, 100),
-        torch.nn.Linear(100, 1),
-    )
+
+def load_train_objs(seed=0, model_config=None):
+    train_set = MyTrainDataset(2048)
+    test_set = MyTrainDataset(2048)
+
+    torch.manual_seed(seed)
+    if model_config is not None:
+        pass
+    else:
+        model = nn.Sequential(
+            torch.nn.Linear(20, 300),
+            torch.nn.GELU(),
+            torch.nn.Linear(300, 300),
+            torch.nn.GELU(),
+            torch.nn.Linear(300, 100),
+            torch.nn.Linear(100, 1),
+        )
     # load your model
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-10)
-    return train_set, model, optimizer
+    return train_set, test_set, model, optimizer
 
 
 def prepare_dataloader(dataset: Dataset, batch_size: int):
@@ -126,7 +131,7 @@ def main(
     rank: int, world_size: int, save_every: int, total_epochs: int, batch_size: int
 ):
     ddp_setup(rank, world_size)
-    dataset, model, optimizer = load_train_objs()
+    dataset, test_set, model, optimizer = load_train_objs()
     train_data = prepare_dataloader(dataset, batch_size)
     trainer = Trainer(model, train_data, optimizer, rank, save_every)
     trainer.train(total_epochs)
@@ -135,7 +140,7 @@ def main(
 
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(description="simple distributed training job")
     parser.add_argument(
         "total_epochs", type=int, help="Total epochs to train the model"
