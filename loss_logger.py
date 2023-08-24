@@ -1,5 +1,38 @@
 import pickle
 import os
+import torch
+from torch.distributed import (
+    all_reduce,
+    ReduceOp,
+)
+
+
+class distributed_loss_track:
+    def __init__(self, project="time_series_pred", file_name: str = "loss.log"):
+        self.project = project
+        self.file_name = file_name
+        self.temp_loss = 0
+        self.counter = 1
+        ## Bu kodu yazanlar ne güzel mühendislerdir, onların supervisorları ne
+        ## iyi supervisorlardır
+
+    def update(self, loss):
+        self.temp_loss += loss
+        self.counter += 1
+
+    def get_avg_loss(self):
+        return self.temp_loss / self.counter
+
+    def all_reduce(self):
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+        else:
+            device = torch.device("cpu")
+        loss_tensor = torch.tensor(
+            [self.temp_loss, self.counter], device=device, dtype=torch.float32
+        )
+        all_reduce(loss_tensor, ReduceOp.SUM, async_op=False)
+        self.temp_loss, self.counter = loss_tensor.tolist()
 
 
 class loss_track:
