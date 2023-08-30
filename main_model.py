@@ -73,8 +73,8 @@ class main_model(nn.Module):
 
 torch.manual_seed(0)
 t = main_model(number_ts=264, embedding_dim=512, n_blocks=12)
-t = t.cuda(1)
-t = torch.compile(t)
+t = t.cuda(0)
+# t = torch.compile(t)
 # t((torch.randn(1, 1, 512, device="cuda:1"), torch.tensor([[2]], device="cuda:1")))
 
 
@@ -84,7 +84,7 @@ lags = [513 for _ in memmap_lengths]
 
 data = ts_concatted(array=memmap_data, lengths=memmap_lengths, lags=lags)
 
-train_dataloader = DataLoader(data, batch_size=128, shuffle=True, num_workers=4)
+train_dataloader = DataLoader(data, batch_size=64, shuffle=True, num_workers=4)
 optimizer = torch.optim.SGD(t.parameters(), lr=0.0001)
 scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15)
 
@@ -101,8 +101,8 @@ for j in range(5):
 
     for i, (x, y, tse) in enumerate(train_dataloader):
         m = time.time()
-        x, y, tse = map(lambda x: x.cuda(1).unsqueeze(1), [x, y, tse])
-        loss = torch.tensor([0], dtype=torch.bfloat16).cuda(1)
+        x, y, tse = map(lambda x: x.cuda(0).unsqueeze(1), [x, y, tse])
+        loss = torch.tensor([0], dtype=torch.bfloat16).cuda(0)
 
         with autocast(device_type="cuda", dtype=torch.bfloat16):
             output = t((x, tse))

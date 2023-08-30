@@ -13,12 +13,17 @@ class distributed_loss_track:
         self.file_name = file_name
         self.temp_loss = 0
         self.counter = 1
+        self.loss = []
         ## Bu kodu yazanlar ne güzel mühendislerdir, onların supervisorları ne
         ## iyi supervisorlardır
 
     def update(self, loss):
         self.temp_loss += loss
         self.counter += 1
+
+    def reset(self):
+        self.temp_loss = 0
+        self.counter = 0
 
     def get_avg_loss(self):
         return self.temp_loss / self.counter
@@ -33,6 +38,14 @@ class distributed_loss_track:
         )
         all_reduce(loss_tensor, ReduceOp.SUM, async_op=False)
         self.temp_loss, self.counter = loss_tensor.tolist()
+        self.loss.append(self.temp_loss)
+
+    ## The below function is not ready to use!!!
+    def __flush__(self):
+        dict_ = {"project": self.project, "loss": self.loss}
+        num = self.num_epochs
+        with open(f"{num}_epoch" + self.file_name, mode="ab") as file:
+            pickle.dump(dict_, file)
 
 
 class loss_track:
