@@ -5,9 +5,11 @@ from sklearn.ensemble import RandomForestRegressor
 from preprocess import get_csv_list, preprocess_csv
 import os
 import pandas as pd
+import pickle
+import time
 
 
-def return_split(ts: np.ndarray, split_ratio: float = 0.8, lags: int = 512):
+def return_split(ts: np.ndarray, split_ratio: float = 0.8, lags: int = 16):
     """_summary_
 
     Args:
@@ -50,25 +52,31 @@ def return_final_result(
     **kwargs,
 ):
     preprocessed_ts, _ = preprocess_csv(csv_file, numerical_column=numerical_column)
-    numerical_ts = preprocessed_ts.iloc[:, numerical_column].to_numpy()[:5000]
+    numerical_ts = preprocessed_ts.iloc[:, numerical_column].to_numpy()
     X_train, y_train, X_test, y_test = return_split(
         numerical_ts, split_ratio=split_ratio, lags=lags
     )
     np.random.seed(seed)
-    rf = regressor(**kwargs)
+    rf = regressor(**kwargs, n_jobs=6)
     rf.fit(X_train, y_train)
     score = rf.score(X_test, y_test)
-    print(f"{csv_file} Done")
-    return score, csv_file
+    print(f"{csv_file, score} Done")
+    return score, csv_file, score
 
 
 def main():
     csv_list = get_csv_list()
-    with concurrent.futures.ProcessPoolExecutor(max_workers=12) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=2) as executor:
         res = executor.map(return_final_result, csv_list)
     return res
 
 
 if __name__ == "__main__":
+    a = time.time()
     res = main()
-    print(list(res))
+    list_ = list(res)
+    b = time.time()
+    list_ += [b - a]
+    with open("pickled.t", mode="wb") as file:
+        pickle.dump(list_, file)
+    print(list_)
