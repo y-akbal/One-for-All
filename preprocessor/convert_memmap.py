@@ -7,15 +7,15 @@ class memmap_array:
     def __init__(self, name="array.dat", directory = None):
         self.lengths = None ## Save for later use
         self.array = None ## Save for later use
+        self.csv_names = None        
         self.name = name
         self.directory = directory
-
-            
         
-   
+  
     def fit(self, dtype=np.float32):
+        self.csv_names = [file for file in self.__getcsvlist__()]
         self.lengths = [
-            len(pd.read_csv(file, low_memory=True)) for file in self.__getcsvlist__()
+            len(pd.read_csv(file, low_memory=True)) for file in self.csv_names
         ]
         self.cum_len = np.cumsum([0] + self.lengths)
         self.len = sum(self.lengths)
@@ -23,7 +23,7 @@ class memmap_array:
             ## We save the concatted arrays
             self.array = np.memmap(self.name, shape=(self.len,), dtype=dtype, mode="w+")
             ## We save the lengths of the arrays for future use
-            Lengths = np.memmap(
+            lengths = np.memmap(
                 "lengths" + self.name,
                 shape=(len(self.lengths),),
                 dtype=np.uint32,
@@ -43,10 +43,16 @@ class memmap_array:
             self.array[l_index:h_index] = csv.to_numpy()
 
         ## lengths are saved here ##
-        Lengths[:] = self.lengths
-
+        lengths[:] = self.lengths
+        
+        ## we now save the names of the csv files in a txt file -4 is for deleting .dat
+        with open("names_" + self.name[:-4] + ".txt", mode = "w") as f:
+            for name in self.csv_names:
+                f.write(name + "\n")
+        
         self.array.flush()  ## we write everything to the disk!!!!
-        Lengths.flush()  ## we write everything to the disk!!!!
+        lengths.flush()  ## we write everything to the disk!!!!
+        
 
 
 
@@ -63,7 +69,7 @@ class memmap_array:
         """
         This dude will work in tandem with the memmmap arrays
         """
-        return {"array": self.array, "lengths":self.lengths}        
+        return {"array": self.array, "lengths":self.lengths, "csv_names": self.csv_names}        
 
     def __preprocess__(self, frame):
         ### Here you can do whatever you like with the given frame object,
