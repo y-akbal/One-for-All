@@ -105,8 +105,9 @@ def preprocess_csv(csv_file: str, numerical_column=-1) -> tuple:
 def main() -> None:
     ############# Create the main directory to copy preprocessed files #################
     try:
-        os.mkdir(NEW_PATH+"_test")
-        os.mkdir(NEW_PATH+"_train")
+        if SPLIT_RATIO > 0:
+            os.mkdir(NEW_PATH+"_test")
+            os.mkdir(NEW_PATH+"_train")
         os.mkdir(NEW_PATH)
     except FileExistsError:
         raise (CreationError)
@@ -126,21 +127,27 @@ def main() -> None:
             #name = os.path.join(NEW_PATH, csv_file)
             #preprocessed_pd.to_csv(name)
             N_ = len(preprocessed_pd)
-            N = int(N_*SPLIT_RATIO)
-            for T  in ["_train", "_test", ""]:
+            if SPLIT_RATIO > 0:
+                ## If you really like to split the dataset
+                N = int(N_*SPLIT_RATIO)
+                for T  in ["_train", "_test", ""]:
 
-                if T == "_train":
-                    name_train = os.path.join(NEW_PATH+T, csv_file)
-                    preprocessed_pd.iloc[:N,:].to_csv(name_train)
-                elif T == "_test":
-                    name_test = os.path.join(NEW_PATH+T, csv_file)
-                    preprocessed_pd.iloc[N:,:].to_csv(name_test)
-                else:
-                    name_main = os.path.join(NEW_PATH+T, csv_file)
-                    preprocessed_pd.to_csv(name_main)
-            ### Now record the statistics to a dataframe ###                    
+                    if T == "_train":
+                        name_train = os.path.join(NEW_PATH+T, csv_file)
+                        preprocessed_pd.iloc[:N,:].to_csv(name_train)
+                    elif T == "_test":
+                        name_test = os.path.join(NEW_PATH+T, csv_file)
+                        preprocessed_pd.iloc[N:,:].to_csv(name_test)
+                    else:
+                        name_main = os.path.join(NEW_PATH+T, csv_file)
+                        preprocessed_pd.to_csv(name_main)
+                ### Now record the statistics to a dataframe ###                    
+                
+                ##watchaa the order this is important
+            else:
+                name_main = os.path.join(NEW_PATH, csv_file)
+                preprocessed_pd.to_csv(name_main)
             spatial_statistics[csv_file] = statistics
-            ##watchaa the order this is important
         except Exception as exception:
             message += 1
             logger_.write_log(f"{exception} is wrong with {csv_file}")
@@ -168,8 +175,8 @@ if __name__ == "__main__":
         print("Preprocessing is done!")
         for T in ["_train", "_test"]:
             directory = NEW_PATH+T
-            T_ = memmap_array("array"+f"{T}.data", directory = directory)
-            T_.fit()
+            T_ = memmap_array("array"+f"{T}.dat", directory = directory)
+            T_.fit(dtype = np.float32)
     except Exception as exception:
         print(f"Something went wrong!!! Here is the thing {exception}")
         
