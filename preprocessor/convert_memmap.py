@@ -4,10 +4,13 @@ import numpy as np
 
 
 class memmap_array:
-    def __init__(self, name="array.dat"):
+    def __init__(self, name="array.dat", directory = None):
         self.lengths = None ## Save for later use
         self.array = None ## Save for later use
         self.name = name
+        self.directory = directory
+
+            
         
    
     def fit(self, dtype=np.float32):
@@ -48,11 +51,11 @@ class memmap_array:
 
 
     def __getcsvlist__(self):
-        list_ = os.listdir()
+        list_ = os.listdir(self.directory)
         csv = []
         for file in list_:
             if file.endswith(".csv"):
-                csv.append(file)
+                csv.append(self.directory+"/"+file)
         return csv
 
 

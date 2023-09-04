@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import statsmodels
 from statsmodels.tsa.stattools import adfuller, arma_order_select_ic
+from convert_memmap import memmap_array
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -127,17 +128,16 @@ def main() -> None:
             N_ = len(preprocessed_pd)
             N = int(N_*SPLIT_RATIO)
             for T  in ["_train", "_test", ""]:
-                name = os.path.join(NEW_PATH+T, csv_file)
-                
+
                 if T == "_train":
-                    name = os.path.join(NEW_PATH+T, csv_file)
-                    preprocessed_pd.iloc[:N,:].to_csv(name)
+                    name_train = os.path.join(NEW_PATH+T, csv_file)
+                    preprocessed_pd.iloc[:N,:].to_csv(name_train)
                 elif T == "_test":
-                    name = os.path.join(NEW_PATH+T, csv_file)
-                    preprocessed_pd.iloc[N:,:].to_csv(name)
+                    name_test = os.path.join(NEW_PATH+T, csv_file)
+                    preprocessed_pd.iloc[N:,:].to_csv(name_test)
                 else:
-                    name = os.path.join(NEW_PATH+T, csv_file)
-                    preprocessed_pd.to_csv(name)
+                    name_main = os.path.join(NEW_PATH+T, csv_file)
+                    preprocessed_pd.to_csv(name_main)
             ### Now record the statistics to a dataframe ###                    
             spatial_statistics[csv_file] = statistics
             ##watchaa the order this is important
@@ -162,5 +162,14 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    f = main()
-
+    parent_dir = os.getcwd()
+    try:
+        df = main()
+        print("Preprocessing is done!")
+        for T in ["_train", "_test"]:
+            directory = NEW_PATH+T
+            T_ = memmap_array("array"+f"{T}.data", directory = directory)
+            T_.fit()
+    except Exception as exception:
+        print(f"Something went wrong!!! Here is the thing {exception}")
+        
