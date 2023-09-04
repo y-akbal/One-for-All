@@ -86,6 +86,7 @@ def preprocess_csv(csv_file: str, numerical_column=-1) -> tuple:
     time_series = pandas_frame.iloc[:, numerical_column]  ### cleared time series
     #### Here we need to have p-values of unit-root tests, PACF results ACF results to get results on
     statistics = statistical_results(time_series)
+    
     mean = statistics["Mean"]
     std = statistics["Std"]
     # max = statistics["Max"]
@@ -94,7 +95,6 @@ def preprocess_csv(csv_file: str, numerical_column=-1) -> tuple:
     pandas_frame.iloc[:, numerical_column] = (
         pandas_frame.iloc[:, numerical_column] - mean
     ) / std
-
     return (
         pandas_frame,
         statistics,
@@ -145,9 +145,10 @@ def main() -> None:
             message += 1
             logger_.write_log(f"{exception} is wrong with {csv_file}")
     ### Now convert statistics to pandas data frame ---
+    
     data_frame = pd.DataFrame().from_dict(spatial_statistics)
     data_frame = data_frame.transpose()
-    data_frame.to_excel("results.xlsx")
+    data_frame.to_csv("results.csv")
 
     ### Final Stuff ###
     if message > 0:
@@ -156,9 +157,10 @@ def main() -> None:
         )
     else:
         print("All csv files were processed successfully!")
-        print("See also results.xlsx for the means and the standard deviations.")
-    return None
+        print("See also results.csv for the means and the standard deviations.")
+    return data_frame
 
 
 if __name__ == "__main__":
-    main()
+    f = main()
+
