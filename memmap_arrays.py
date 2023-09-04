@@ -38,6 +38,9 @@ class ts_concatted:
     def __len__(self) -> int:
         return len(self.array) - sum(self.lags) + len(self.lags)
 
+    def __read_csvfile__(self):
+	pass
+
 
 if __name__ == "__main__":
     print("Testing")
