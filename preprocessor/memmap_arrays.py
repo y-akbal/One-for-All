@@ -32,11 +32,14 @@ class ts_concatted:
         place_ = self.__place__(i, self.cumhors)
 
         X = self.array[i + self.m[place_] : i + self.m[place_] + self.lags[place_]]
-
-        return X[:-1], X[-1], place_
+        N = len(X)
+        return X[:-1], X[4:N:4], place_
 
     def __len__(self) -> int:
         return len(self.array) - sum(self.lags) + len(self.lags)
+
+    def __read_csvfile__(self):
+	pass
 
 
 if __name__ == "__main__":
