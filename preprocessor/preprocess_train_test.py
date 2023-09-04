@@ -6,7 +6,6 @@ import statsmodels
 from statsmodels.tsa.stattools import adfuller, arma_order_select_ic
 
 import warnings
-
 warnings.filterwarnings("ignore")
 
 
@@ -127,20 +126,25 @@ def main() -> None:
             #preprocessed_pd.to_csv(name)
             N_ = len(preprocessed_pd)
             N = int(N_*SPLIT_RATIO)
-            for i,T in enumerate(["_train", "_test"]):
+            for T  in ["_train", "_test", ""]:
                 name = os.path.join(NEW_PATH+T, csv_file)
                 
-                if not i:
+                if T == "_train":
                     name = os.path.join(NEW_PATH+T, csv_file)
                     preprocessed_pd.iloc[:N,:].to_csv(name)
-                else:
+                elif T == "_test":
                     name = os.path.join(NEW_PATH+T, csv_file)
                     preprocessed_pd.iloc[N:,:].to_csv(name)
+                else:
+                    name = os.path.join(NEW_PATH+T, csv_file)
+                    preprocessed_pd.to_csv(name)
+            ### Now record the statistics to a dataframe ###                    
             spatial_statistics[csv_file] = statistics
             ##watchaa the order this is important
         except Exception as exception:
             message += 1
             logger_.write_log(f"{exception} is wrong with {csv_file}")
+    ### Now convert statistics to pandas data frame ---
     data_frame = pd.DataFrame().from_dict(spatial_statistics)
     data_frame = data_frame.transpose()
     data_frame.to_excel("results.xlsx")
