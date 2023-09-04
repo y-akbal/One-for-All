@@ -3,8 +3,9 @@ Some files related to the upcoming manuscript which revolves around ensemble lea
 1) preprocessor.py is responsible for picking up the designated columns and normalizing them. Furthermore, if something goes wrong, a seperate log.txt file will be provided as well as some statistical properties that are obtained as a result of normalization. To do so, you need to adjust the global variables inside the preprocessor.py file. 
 2) layers.py contains some of the layers to be used. For the sake of completeness we implement our own layers,
 3) preprocess.py will contain necessary functions to grab the data out of csv files and do some preprocessing and prepare them,
-4) memmap_arrays.py is a signature snippet, grabbing time series and giving lags, in a memmap file. 
-5) pipeline.py and convert_memmap.py are responsible by converting data to numpy memmap.
+4) convert_memmap.py wll convert will grab csv files convert them into data.dat and lengths.dat files.
+5) memmap_arrays.py is a signature snippet, grabbing data.dat and lengths.dat files, and will give you a window of given size from your concatted time series, as X[:-1], X[-1] and place_, where place_ indicates which time series to be used.
+
 
 Things to do:
   5) Unit_tests.py will contain a base class that contain some utility and unit tests to test the model. 
