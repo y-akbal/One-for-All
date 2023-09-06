@@ -66,13 +66,13 @@ class Model(nn.Module):
     @classmethod 
     def from_config_file(cls, config_file):
         
-        with open(config_file) as file:
+        with open(config_file, mode = "rb") as file:
             dict_ = pickle.load(file)
         return cls(**dict_)
     @classmethod
     def from_pretrained(cls, file_name, config_file):
         non_trained_model = cls.from_config_file(config_file)
-        non_trained_model.load(file_name)
+        non_trained_model.load_state_dict(torch.load(file_name))
         return non_trained_model
         
     @classmethod
@@ -80,8 +80,8 @@ class Model(nn.Module):
         return cls.from_config_file(data_class.__dict__)
     
     def write_config_file(self, file_name):
-        with open(file_name, mode = "w") as file:
-            pickle.dumb(file_name)
+        with open(file_name, mode = "wb") as file:
+            pickle.dump(self.config,file)
     
     def save_model(self, file_name = None):
         fn = "Model" if file_name == None else file_name
@@ -107,11 +107,11 @@ class Model(nn.Module):
         x = self.blocks(x)
         return self.Linear(x)
 
-"""
-model = Model()
+
+model = Model.from_pretrained("10epoch.trc", "config_file10epoch.cfg")
+
+
 
 model([torch.randn(1, 1, 512), torch.tensor([0])])
 
 model.save_model("10epoch")
-        
-"""
