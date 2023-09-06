@@ -124,7 +124,7 @@ def main():
             counter += 1
             temp_loss -= (temp_loss - loss.item()) / counter
             q = time.time() - m
-            if i % 20 == 0:
+            if i % 30 == 0:
                 print(
                     f"Batch num {i}, The loss is {temp_loss:0.2f}, time to pass a single batch {q}, current lr is {scheduler.get_last_lr()}"
                 )
