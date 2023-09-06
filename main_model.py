@@ -77,7 +77,7 @@ class Model(nn.Module):
         
     @classmethod
     def from_data_class(cls, data_class):
-        return cls.from_config_file(data_class.__dict__)
+        return cls(**data_class.__dict__)
     
     def write_config_file(self, file_name):
         with open(file_name, mode = "wb") as file:
