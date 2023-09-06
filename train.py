@@ -71,7 +71,7 @@ class Trainer:
     def _run_batch(self, source, targets):
         ### All the things like low precision training will happen dude!!!
         self.optimizer.zero_grad()
-        with self.autocast(device_type="cuda", dtype=torch.bfloat32):
+        with self.autocast(device_type="cuda", dtype=torch.bfloat16):
             output = self.model(source)
             loss = F.mse_loss(output, targets)
 
