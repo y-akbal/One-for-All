@@ -110,7 +110,8 @@ class Trainer:
             for source, targets in self.val_data:
                 source = source.to(self.gpu_id)
                 targets = targets.to(self.gpu_id)
-                output = self.model(source)
+                output = self.model(source)  
+                """"""
                 loss = F.mse_loss(output, targets)
                 self.val_loss_logger.update(loss.item())
             self.val_loss_logger.all_reduce()
