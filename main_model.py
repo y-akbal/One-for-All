@@ -90,7 +90,7 @@ class Model(nn.Module):
             self.write_config_file("config_file"+fn + ".cfg")
             print("Model saved succesfully, see {fn}.trc files  for the weight")
         except Exception as exp:
-            print(f"Something went wrong with {exp}!!!!")
+            print(f"Something went wrong with {exp}!!!!!")
          
          
         
