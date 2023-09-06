@@ -8,8 +8,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import (
     init_process_group,
     destroy_process_group,
-    all_reduce,
-    ReduceOp,
+    #all_reduce,
+    #ReduceOp,
 )
 from loss_logger import distributed_loss_track
 
