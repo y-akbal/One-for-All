@@ -69,7 +69,7 @@ class Model(nn.Module):
             torch.save(self.state_dict(), f"{fn}")
             print("Model saved succesfully")
         except Exception as exp:
-            print(f"{exp}")
+            print(f"Something went wrong with {exp}!!!!")
         
         
     def forward(self, x):
