@@ -148,7 +148,7 @@ def main():
     data = ts_concatted(array=memmap_data, lengths=memmap_lengths, lags=lags)
     test_dataloader = DataLoader(data, batch_size=256, shuffle=False, num_workers=5)
 
-    temp_loss = 0.1
+    temp_loss = 1e-5
     counter = 0
 
     with torch.no_grad():
