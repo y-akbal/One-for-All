@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader
 from memmap_arrays import ts_concatted
 import numpy as np
 import time
+from main_model import Model
 
 ## This is important in the case that you compile the model!!!!
 torch.set_float32_matmul_precision("high")
@@ -13,67 +14,10 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 
-class main_model(nn.Module):
-    def __init__(
-        self,
-        lags: int = 512,
-        embedding_dim: int = 64,
-        n_blocks: int = 10,
-        pool_size: int = 4,
-        number_of_heads=4,
-        number_ts=25,
-        num_of_clusters=None,  ### number of clusters of times series
-        channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
-    ):
-        assert (
-            lags / pool_size
-        ).is_integer(), "Lag size should be divisible by pool_size"
-        super().__init__()
-        self.width = lags // pool_size
-        self.embedding_dim = embedding_dim
-        ###
-        self.cluster_used = True if num_of_clusters is not None else False
-        ###
-        self.blocks = nn.Sequential(
-            *(
-                block(
-                    embedding_dim,
-                    width=self.width,
-                    n_heads=number_of_heads,
-                )
-                for _ in range(n_blocks)
-            )
-        )
-        self.up_sampling = Upsampling(
-            lags=lags,
-            d_out=self.embedding_dim,
-            pool_size=pool_size,
-            num_of_ts=number_ts,
-            conv_activation=F.gelu,
-            num_of_clusters=num_of_clusters,
-            channel_shuffle_group=channel_shuffle_group,
-        )
-
-        ###
-        self.Linear = Linear(self.embedding_dim, 1)
-        ###
-
-    def forward(self, x):
-        ## Here we go with upsampling layer
-        if self.cluster_used:
-            x, tse_embedding, cluster_embedding = x[0], x[1], x[2]
-            x = self.up_sampling((x, tse_embedding, cluster_embedding))
-        else:
-            x, tse_embedding = x[0], x[1]
-            x = self.up_sampling((x, tse_embedding))
-        ## Concatted transformer blocks
-        ###
-        x = self.blocks(x)
-        return self.Linear(x)
 
 def main():
     torch.manual_seed(0)
-    model = main_model(number_ts=264, embedding_dim=256, n_blocks=6)
+    model = Model(number_ts=264, embedding_dim=256, n_blocks=6)
     t = model.cuda(1)
     t = torch.compile(t)
     try:
