@@ -72,7 +72,7 @@ class loss_track:
     mean and variance in the epoch.
 
 
-    Turkish: Atanamamış W&B yaptık burada....
+    Turkish: Atanamamış W&B yaptık burada...
     """
 
     def __init__(self, project="time_series_pred", file_name: str = "loss.log") -> None:
