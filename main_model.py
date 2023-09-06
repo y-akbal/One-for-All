@@ -50,6 +50,17 @@ class Model(nn.Module):
         ###
         self.Linear = Linear(self.embedding_dim, 1)
         ###
+        ### here is the config dict to be used
+        self.config = {"lags":lags, 
+                       "embedding_dim":embedding_dim,
+                       "n_blocks":n_blocks,
+                       "pool_size":pool_size,
+                       "number_of_heads":number_of_heads, 
+                       "number_ts":number_ts,
+                       "num_of_clusters":num_of_clusters,
+                       "channel_shuffle_group":channel_shuffle_group
+                       }
+        
 
     @classmethod 
     def from_config_file(cls, config_file):
@@ -66,8 +77,9 @@ class Model(nn.Module):
     def save_model(self, file_name = None):
         fn = "Model" if file_name == None else file_name
         try:
-            torch.save(self.state_dict(), f"{fn}")
-            print("Model saved succesfully")
+            torch.save(self.state_dict(), f"{fn}.trc")
+            self.write_config_file(self, "config_file"+fn)
+            print("Model saved succesfully, see {fn}.trc files for the weight")
         except Exception as exp:
             print(f"Something went wrong with {exp}!!!!")
         
