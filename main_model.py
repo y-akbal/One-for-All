@@ -6,7 +6,7 @@ from layers import block, Upsampling, Linear
 
 
 
-class main_model(nn.Module):
+class Model(nn.Module):
     def __init__(
         self,
         lags: int = 512,
@@ -58,9 +58,12 @@ class main_model(nn.Module):
     def from_config_file(cls, config_file):
         pass
     @classmethod
-    def from_data_class(cls, config_file):
+    def from_data_class(cls, data_class):
         pass
     def write_config_file(self, file_name):
+        pass
+    
+    def save_model(self, file_name):
         pass
     
     
