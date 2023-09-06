@@ -108,10 +108,15 @@ class Model(nn.Module):
         return self.Linear(x)
 
 
+"""
+model = Model()
+
 model = Model.from_pretrained("10epoch.trc", "config_file10epoch.cfg")
+model = Model.from_config_file("write_it.cfg")
 
-
-
+torch.manual_seed(0)
 model([torch.randn(1, 1, 512), torch.tensor([0])])
 
 model.save_model("10epoch")
+        
+"""
