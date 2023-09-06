@@ -2,6 +2,7 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 from layers import block, Upsampling, Linear
+import pickle
 
 
 
@@ -10,10 +11,10 @@ class Model(nn.Module):
     def __init__(
         self,
         lags: int = 512,
-        embedding_dim: int = 64,
-        n_blocks: int = 10,
+        embedding_dim: int = 512,
+        n_blocks: int = 25,
         pool_size: int = 4,
-        number_of_heads=4,
+        number_of_heads=8,
         number_ts=25,
         num_of_clusters=None,  ### number of clusters of times series
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
@@ -64,25 +65,34 @@ class Model(nn.Module):
 
     @classmethod 
     def from_config_file(cls, config_file):
-        pass
+        
+        with open(config_file) as file:
+            dict_ = pickle.load(file)
+        return cls(**dict_)
     @classmethod
     def from_pretrained(cls, file_name, config_file):
-        pass
+        non_trained_model = cls.from_config_file(config_file)
+        non_trained_model.load(file_name)
+        return non_trained_model
+        
     @classmethod
     def from_data_class(cls, data_class):
-        pass
+        return cls.from_config_file(data_class.__dict__)
+    
     def write_config_file(self, file_name):
-        pass
+        with open(file_name, mode = "w") as file:
+            pickle.dumb(file_name)
     
     def save_model(self, file_name = None):
         fn = "Model" if file_name == None else file_name
         try:
             torch.save(self.state_dict(), f"{fn}.trc")
-            self.write_config_file(self, "config_file"+fn)
-            print("Model saved succesfully, see {fn}.trc files for the weight")
+            self.write_config_file("config_file"+fn + ".cfg")
+            print("Model saved succesfully, see {fn}.trc files  for the weight")
         except Exception as exp:
             print(f"Something went wrong with {exp}!!!!")
-        
+         
+         
         
     def forward(self, x):
         ## Here we go with upsampling layer
@@ -96,4 +106,12 @@ class Model(nn.Module):
         ###
         x = self.blocks(x)
         return self.Linear(x)
-    
+
+"""
+model = Model()
+
+model([torch.randn(1, 1, 512), torch.tensor([0])])
+
+model.save_model("10epoch")
+        
+"""
