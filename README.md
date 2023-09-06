@@ -9,7 +9,7 @@ Some files related to the upcoming manuscript which revolves around ensemble lea
 
 
 Things to do:
-  5) Unit_tests.py will contain a base class that contain some utility and unit tests to test the model. 
+  5) There is a little remaining I believe to do!!!
   6) train_details.py - probably training such a huge model will take a lot of time, therefore we may need to parallelize training process. This file will contain some functions to achieve this.
   
   
