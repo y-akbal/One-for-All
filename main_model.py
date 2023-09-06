@@ -51,11 +51,11 @@ class Model(nn.Module):
         self.Linear = Linear(self.embedding_dim, 1)
         ###
 
-    @classmethod
-    def from_pretrained(cls, file_name):
-        pass
     @classmethod 
     def from_config_file(cls, config_file):
+        pass
+    @classmethod
+    def from_pretrained(cls, file_name, config_file):
         pass
     @classmethod
     def from_data_class(cls, data_class):
@@ -63,10 +63,15 @@ class Model(nn.Module):
     def write_config_file(self, file_name):
         pass
     
-    def save_model(self, file_name):
-        pass
-    
-    
+    def save_model(self, file_name = None):
+        fn = "Model" if file_name == None else file_name
+        try:
+            torch.save(self.state_dict(), f"{fn}")
+            print("Model saved succesfully")
+        except Exception as exp:
+            print(f"{exp}")
+        
+        
     def forward(self, x):
         ## Here we go with upsampling layer
         if self.cluster_used:
