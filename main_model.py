@@ -65,7 +65,6 @@ class Model(nn.Module):
 
     @classmethod 
     def from_config_file(cls, config_file):
-        
         with open(config_file, mode = "rb") as file:
             dict_ = pickle.load(file)
         return cls(**dict_)
@@ -74,7 +73,7 @@ class Model(nn.Module):
         non_trained_model = cls.from_config_file(config_file)
         non_trained_model.load_state_dict(torch.load(file_name))
         return non_trained_model
-        
+      
     @classmethod
     def from_data_class(cls, data_class):
         return cls(**data_class.__dict__)
