@@ -13,9 +13,8 @@ torch.set_float32_matmul_precision("high")
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-
-
 def main():
+    ## Here we create the model!!!
     torch.manual_seed(0)
     model = Model(number_ts=264, embedding_dim=256, n_blocks=6)
     t = model.cuda(1)
