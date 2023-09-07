@@ -8,9 +8,20 @@ import numpy as np
 import time
 from main_model import Model
 
+
+
 ## This is important in the case that you compile the model!!!!
 torch.set_float32_matmul_precision("high")
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def data_loader(**kwargs):
+    pass
+
+def train_model(model:nn.Module, train_data:DataLoader, optimizer:torch.Optimizer):
+    pass
+    
+
 
 
 def main():
