@@ -1,3 +1,6 @@
+manual_seed:
+ seed: 0
+
 trainer_config:
   epochs: 2
   batch_size: 256
@@ -11,11 +14,13 @@ model_config:
 
 optimizer_config:
   lr: 0.0001
- 
-data_config:
-  lags: 512
-  
+  weight_decay: 0.001
+  momentum: 0.99
 
+scheduler_config:
+  T_max: 15
+  
+ 
 train_config:
   max_epochs: 2
   batch_size: 256

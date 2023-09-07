@@ -189,7 +189,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--total_epochs",
         type=int,
-        default=1000,
+        default=3000,
         help="Total epochs to train the model",
     )
     parser.add_argument(

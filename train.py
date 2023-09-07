@@ -134,8 +134,10 @@ def load_train_objs(**train_objs):
         )
     # load your model
     optimizer = torch.optim.SGD(model.parameters(), lr=1e-5)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15)
+
     ### Here you gotta add lr_scheduler this is pretty important
-    return train_set, val_set, model, optimizer
+    return train_set, val_set, model, optimizer, scheduler
 
 
 def train_dataloader(data_set, **kwargs):
@@ -154,6 +156,7 @@ def val_dataloader(data_set, **kwargs):
 def main(
     rank: int, world_size: int, save_every: int, total_epochs: int, batch_size: int
 ):
+    
     ddp_setup(rank, world_size)
 
     ## load the model
