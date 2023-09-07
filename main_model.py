@@ -67,9 +67,9 @@ class Model(nn.Module):
         if isinstance(dict_, dict):
             return cls(**dict_)
         else:
-            raise ValueError("The pickle file should contain a config dictionary")
+            raise ValueError("The pickled file should contain a config dictionary")
     
-    ### Let's these dudes stay here for future versions ###        
+    ### Let's these dudes stay here for future versions, mostly for inference using single gpu!!! ###        
     @classmethod
     def from_pretrained(cls, file_name):
         try:
