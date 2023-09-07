@@ -138,17 +138,18 @@ def load_train_objs(**train_objs):
     return train_set, val_set, model, optimizer
 
 
-def train_dataloader(**train_data):
-    return DataLoader(
-        **train_data
+def train_dataloader(data_set, **kwargs):
+    return DataLoader(dataset = data_set, 
+        sampler = DistributedSampler(data_set, **kwargs),
+        **kwargs,
     )
 
 
-def val_dataloader(**val_data):
-    return DataLoader(
-        **val_data
+def val_dataloader(data_set, **kwargs):
+    return DataLoader(dataset = data_set, 
+        sampler = DistributedSampler(data_set, **kwargs),
+        **kwargs,
     )
-
 
 def main(
     rank: int, world_size: int, save_every: int, total_epochs: int, batch_size: int
