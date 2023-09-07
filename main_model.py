@@ -4,9 +4,6 @@ from torch.nn import functional as F
 from layers import block, Upsampling, Linear
 import pickle
 
-
-
-
 class Model(nn.Module):
     def __init__(
         self,
@@ -67,27 +64,44 @@ class Model(nn.Module):
     def from_config_file(cls, config_file):
         with open(config_file, mode = "rb") as file:
             dict_ = pickle.load(file)
-        return cls(**dict_)
+        if isinstance(dict_, dict):
+            return cls(**dict_)
+        else:
+            raise ValueError("The pickle file should contain a config dictionary")
+    
+    ### Let's these dudes stay here for future versions ###        
     @classmethod
-    def from_pretrained(cls, file_name, config_file):
-        non_trained_model = cls.from_config_file(config_file)
-        non_trained_model.load_state_dict(torch.load(file_name))
-        return non_trained_model
+    def from_pretrained(cls, file_name):
+        try:
+            dict_ = torch.load(file_name)
+            config = dict_["config"]
+            state_dict = dict_["state_dict"]
+            model = cls(**config)    
+            model.load_state_dict(state_dict)
+            print("Model loaded successfully!!!!")
+        except Exception as e:
+            print(f"Something went wrong with {e}")        
+        return model
       
     @classmethod
     def from_data_class(cls, data_class):
-        return cls(**data_class.__dict__)
+        if isinstance(data_class, dict):
+            return cls(**data_class)
+        else:
+            return cls(**data_class.__dict__)
     
     def write_config_file(self, file_name):
         with open(file_name, mode = "wb") as file:
             pickle.dump(self.config,file)
     
-    def save_model(self, file_name = None):
+    def save_model(self, file_name):
         fn = "Model" if file_name == None else file_name
+        model = {}
+        model["state_dict"] = self.state_dict()
+        model["config"] = self.config
         try:
-            torch.save(self.state_dict(), f"{fn}.trc")
-            self.write_config_file("config_file"+fn + ".cfg")
-            print("Model saved succesfully, see {fn}.trc files  for the weight")
+            torch.save(model, f"{fn}")
+            print(f"Model saved succesfully, see the file {fn} for the weights and config file!!!")
         except Exception as exp:
             print(f"Something went wrong with {exp}!!!!!")
          
@@ -110,13 +124,13 @@ class Model(nn.Module):
 """
 model = Model()
 
-model = Model.from_pretrained("10epoch.trc", "config_file10epoch.cfg")
+model = Model.from_pretrained("10epoch.pt")
 model = Model.from_config_file("write_it.cfg")
 
 torch.manual_seed(0)
 model([torch.randn(1, 1, 512), torch.tensor([0])])
 
-model.save_model("10epoch")
+model.save_model("10epoch.r")
         
 """
 

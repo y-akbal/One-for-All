@@ -17,16 +17,8 @@ torch.set_float32_matmul_precision("high")
 ###
 
 
-def ddp_setup(rank, world_size):
-    """
-    Args:
-        rank: Unique identifier of each process
-        world_size: Total number of processes
-    """
-    os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12355"
-    init_process_group(backend="nccl", rank=rank, world_size=world_size)
-    torch.cuda.set_device(rank)
+def ddp_setup():
+    init_process_group(backend="nccl")
 
 ## We grabbed this from the official pytorch github repository.
 class Trainer:
@@ -36,17 +28,18 @@ class Trainer:
         train_data: DataLoader,
         val_data: DataLoader,
         optimizer: torch.optim.Optimizer,
-        gpu_id: int,
+        
         save_every: int,
         val_loss_logger=None,
         train_loss_logger=None,
-        compile=True
+        compile=True,
+        
         # tracker ## this dude is for tracking stuff
     ) -> None:
-        self.gpu_id = gpu_id
-        self.model = model.to(gpu_id)
+        self.gpu_id = int(os.environ.get["LOCAL_RANK"])
+        self.model = model.to(self.gpu_id)
 
-        self.model = DDP(self.model, device_ids=[gpu_id])
+        self.model = DDP(self.model, device_ids=[self.gpu_id])
         if compile:
             self.model = torch.compile(self.model, backend="inductor")
 
@@ -159,9 +152,9 @@ def val_dataloader(dataset: Dataset, batch_size: int):
 
 
 def main(
-    rank: int, world_size: int, save_every: int, total_epochs: int, batch_size: int
+    save_every: int, total_epochs: int, batch_size: int
 ):
-    ddp_setup(rank, world_size)
+    ddp_setup()
     dataset, valset, model, optimizer = load_train_objs()
 
     ## -- ##
@@ -173,7 +166,7 @@ def main(
         train_data,
         val_data,
         optimizer,
-        rank,
+        
         save_every,
         val_loss_logger=loss_tracker,
     )
@@ -206,9 +199,5 @@ if __name__ == "__main__":
     ###  ---------------------------------------------------------------- ###
     world_size = torch.cuda.device_count()
     a = time.time()
-    mp.spawn(
-        main,
-        args=(world_size, args.save_every, args.total_epochs, args.batch_size),
-        nprocs=world_size,
-    )
+    main(10, 128)
     print(time.time() - a)

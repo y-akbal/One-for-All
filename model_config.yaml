@@ -1,0 +1,14 @@
+trainer_config:
+  epochs: 2
+  batch_size: 256
+  data_loader_workers: 4
+  save_every: 15000
+  snapshot_path: "/"
+
+model_config:
+  pass: false
+
+
+optimizer_config:
+  lr: 0.0001
+
