@@ -2,7 +2,7 @@ trainer_config:
   epochs: 2
   batch_size: 256
   data_loader_workers: 4
-  save_every: 15000
+  save_every: 15000 #### not epochs but batches
   snapshot_path: "/"
 
 model_config:
@@ -11,4 +11,26 @@ model_config:
 
 optimizer_config:
   lr: 0.0001
+ 
+data_config:
+  lags: 512
+  
+
+train_config:
+  max_epochs: 2
+  batch_size: 256
+  num_workers: 4
+  shuffle: False
+  pin_memory: True
+
+  
+val_config:
+  batch_size: 256
+  num_workers: 4
+  shuffle: False
+  pin_memory: True
+  drop_last: True
+  
+
+  
 

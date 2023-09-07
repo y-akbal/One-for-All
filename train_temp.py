@@ -9,8 +9,7 @@ from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import Dataset, DataLoader
 from datautils import MyTrainDataset
 from loss_logger import distributed_loss_track
-import numpy as np
-from memmap_arrays import ts_concatted
+import pickle
 
 
 ## This is important in the case that you compile the model!!!!
@@ -113,17 +112,16 @@ class Trainer:
                 # print(self.val_loss_logger.get_avg_loss())
                 self.val_loss_logger.reset()
 
-### The following dude is suberb important!!! ###
 
-def load_train_objs(**train_objs):
-        
-    ### define the train and validation set!!!!!
+def load_train_objs(seed=0, model_config=None):
     train_set = MyTrainDataset(2048)
     val_set = MyTrainDataset(2048)
 
-    ### Define the model
     torch.manual_seed(seed)
-    model = nn.Sequential(
+    if model_config is not None:
+        pass
+    else:
+        model = nn.Sequential(
             torch.nn.Linear(20, 300),
             torch.nn.GELU(),
             torch.nn.Linear(300, 300),
@@ -138,15 +136,25 @@ def load_train_objs(**train_objs):
     return train_set, val_set, model, optimizer
 
 
-def train_dataloader(**train_data):
+def train_dataloader(dataset: Dataset, batch_size: int):
+    
     return DataLoader(
-        **train_data
+        dataset,
+        batch_size=batch_size,
+        pin_memory=True,
+        shuffle=False,
+        sampler=DistributedSampler(dataset),
     )
 
 
-def val_dataloader(**val_data):
+def val_dataloader(dataset: Dataset, batch_size: int):
     return DataLoader(
-        **val_data
+        dataset,
+        batch_size=batch_size,
+        pin_memory=True,
+        shuffle=False,
+        sampler=DistributedSampler(dataset),
+        drop_last=True,  ### drop the last dude to avoid confusion
     )
 
 
@@ -154,19 +162,12 @@ def main(
     rank: int, world_size: int, save_every: int, total_epochs: int, batch_size: int
 ):
     ddp_setup(rank, world_size)
-
-    ## load the model
-    train_data, val_data, model, optimizer = load_train_objs()
-    ## train_data, val_data should be dict containing some necessary information...
-
-    ## load the data
-    train_data = train_dataloader(**train_data)
-    val_data = val_dataloader(**val_data)
-
-    ## load the utility functions
+    dataset, valset, model, optimizer = load_train_objs()
+    
+    ## -- ##
+    train_data = train_dataloader(dataset, batch_size)
+    val_data = val_dataloader(valset, batch_size)
     loss_tracker = distributed_loss_track()
-
-    ## Define the trainin loop ##
     trainer = Trainer(
         model,
         train_data,
@@ -176,26 +177,39 @@ def main(
         save_every,
         val_loss_logger=loss_tracker,
     )
-
-    ## Let it be !!! ##
     trainer.train(total_epochs)
-    ## Kill the rest ##
+    
     destroy_process_group()
 
 
 if __name__ == "__main__":
-    save_every = 10
-    total_epochs = 10
-    batch_size = 128
-    
+    import argparse
 
+    parser = argparse.ArgumentParser(description="simple distributed training job")
+    parser.add_argument(
+        "--total_epochs",
+        type=int,
+        default=1000,
+        help="Total epochs to train the model",
+    )
+    parser.add_argument(
+        "--save_every", type=int, default=100000, help="How often to save a snapshot"
+    )
+    parser.add_argument(
+        "--batch_size",
+        default=256,
+        type=int,
+        help="Input batch size on each device (default: 32)",
+    )
+    args = parser.parse_args()
     import time
+
     ###  ---------------------------------------------------------------- ###
     world_size = torch.cuda.device_count()
     a = time.time()
     mp.spawn(
         main,
-        args=(world_size, save_every, total_epochs, batch_size),
+        args=(world_size, args.save_every, args.total_epochs, args.batch_size),
         nprocs=world_size,
     )
     print(time.time() - a)
