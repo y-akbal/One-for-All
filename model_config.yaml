@@ -1,5 +1,7 @@
 manual_seed:
  seed: 0
+ compile: True
+ 
 
 trainer_config:
   epochs: 2
@@ -9,6 +11,12 @@ trainer_config:
   snapshot_path: "/"
 
 model_config:
+  number_ts: 264
+  embedding_dim: 256
+  n_blocks: 12
+  pool_size: 4
+  number_of_heads: 4
+  
   pass: false
 
 
