@@ -7,6 +7,11 @@ from memmap_arrays import ts_concatted
 import numpy as np
 import time
 from main_model import Model
+## import hydra now
+import hydra
+from omegaconf import DictConfig, OmegaConf
+
+
 
 
 
@@ -20,18 +25,31 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 def data_loader(**kwargs):
     pass
 
-def train_model(model:nn.Module, train_data:DataLoader, optimizer:torch.Optimizer):
+def train_model(model:nn.Module, train_data:DataLoader, optimizer):
     pass
 
 def validate_model(model:nn.Module, validate_data:DataLoader):
     pass
 
 
-
-def main():
+@hydra.main(version_base=None, config_path=".", config_name="model_config")
+def main(cfg : DictConfig):
+    trainer_config, model_config, optimizer_config, technical_stuff = cfg["trainer_config"], cfg["model_config"], cfg["optimizer_config"], cfg["technical_stuff"]
+      
+    
+    seed = technical_stuff["seed"]
+    device = technical_stuff["device"]
+    ### let's get started ### -- let's create the model
+    torch.manual_seed(seed)
+    model = Model(**model_config)
+    ###
+    model = model.cuda(device)
+    ### 
+        
+    return model
     ## Here we create the model!!!
-    torch.manual_seed(0)
-    model = Model(number_ts=264, embedding_dim=256, n_blocks=6, number_of_heads = 4)
+    
+    
     t = model.cuda(1)
     t = torch.compile(t)
     try:
@@ -58,7 +76,6 @@ def main():
     ### 
 
     for j in range(1,3):
-
           
         temp_loss = 0.1
         counter = 0
