@@ -6,6 +6,7 @@ Some files related to the upcoming manuscript which revolves around ensemble lea
 4) convert_memmap.py wll convert will grab csv files convert them into data.dat and lengths.dat files.
 5) memmap_arrays.py is a signature snippet, grabbing data.dat and lengths.dat files, and will give you a window of given size from your concatted time series, as X[:-1], X[-1] and place_, where place_ indicates which time series to be used.
 6) RF.py is used to do old-school machine learning analysis -  given that all csv.files are preprocessed - you can choose for instance randomforest or KNN sort of old school stuff. Splitting of time series is done on the fly. Multiprocessing is supported. At the end of the procedure, a file will be provided to see the results.
+7) validate.py is for validation purposses, for instance to see R^2, MSE, MAE, MAPE values on both train and validation set.
 
 
 Things to do:
