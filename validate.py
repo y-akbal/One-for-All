@@ -3,6 +3,7 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
+from main_model import Model
 from memmap_arrays import ts_concatted
 import numpy as np
 import tqdm
@@ -17,10 +18,6 @@ def return_dataset(**kwargs):
     data_ = ts_concatted(**{"array":memmap_data, "lengths": memmap_lengths, "lags": lags})
     return data_
 
-def data_loader(data, **kwargs):
-    return DataLoader(data, **kwargs)
-
-
 def main(**kwargs):
     """
     things to do here
@@ -29,8 +26,18 @@ def main(**kwargs):
     3) Create a csv file
     4) Compare it with others
     """
-    print(kwargs)
-
+    ### First grab the data:
+    data = return_dataset(**kwargs)
+    batch_size = kwargs["batch_size"]
+    batched_data = DataLoader(data, shuffle = False,**kwargs)
+    ## -- ##
+       
+    file_name = kwargs["file_name"]    
+    try:
+        trained_model = Model.from_pretrained(file_name)
+    except Exception as exp:
+        print(f"Something went wrong with {exp}!!!")
+    
 
 if __name__ == "__main__":
     import argparse
@@ -60,12 +67,13 @@ if __name__ == "__main__":
         help="lenghts of concatted time series",
     )
     parser.add_argument(
-        "--config_file",
+        "--model_file",
         type=str,
-        help = "config file for th emodel"
+        help = "config file to create the model that has been already trained", 
     )
     parser.add_argument(
         "--report_file",
+        default = "report.csv",
         type = str,
         help = "Report file to be written"
     )
