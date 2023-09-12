@@ -59,7 +59,22 @@ class Model(nn.Module):
                        "channel_shuffle_group":channel_shuffle_group
                        }
         
-
+  
+        
+    def forward(self, x):
+        ## Here we go with upsampling layer
+        if self.cluster_used:
+            x, tse_embedding, cluster_embedding = x[0], x[1], x[2]
+            x = self.up_sampling((x, tse_embedding, cluster_embedding))
+        else:
+            x, tse_embedding = x[0], x[1]
+            x = self.up_sampling((x, tse_embedding))
+        ## Concatted transformer blocks
+        ###
+        x = self.blocks(x)
+        return self.Linear(x)
+    
+    
     @classmethod 
     def from_config_file(cls, config_file):
         with open(config_file, mode = "rb") as file:
@@ -105,20 +120,7 @@ class Model(nn.Module):
         except Exception as exp:
             print(f"Something went wrong with {exp}!!!!!")
          
-         
-        
-    def forward(self, x):
-        ## Here we go with upsampling layer
-        if self.cluster_used:
-            x, tse_embedding, cluster_embedding = x[0], x[1], x[2]
-            x = self.up_sampling((x, tse_embedding, cluster_embedding))
-        else:
-            x, tse_embedding = x[0], x[1]
-            x = self.up_sampling((x, tse_embedding))
-        ## Concatted transformer blocks
-        ###
-        x = self.blocks(x)
-        return self.Linear(x)
+       
 
 
 """
