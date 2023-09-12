@@ -8,6 +8,10 @@ from memmap_arrays import ts_concatted
 import numpy as np
 import tqdm
 import pandas as pd
+import time
+
+
+    
 
 
 def return_dataset(**kwargs):
@@ -31,12 +35,19 @@ def main(**kwargs):
     batch_size = kwargs["batch_size"]
     batched_data = DataLoader(data, shuffle = False,**kwargs)
     ## -- ##
-       
-    file_name = kwargs["file_name"]    
+    ## Let's load the model from trained file ##    
+    file_name = kwargs["file_name"]   
+    device =  kwargs["gpu"]
     try:
-        trained_model = Model.from_pretrained(file_name)
+        trained_model = Model.from_pretrained(file_name).device()
     except Exception as exp:
         print(f"Something went wrong with {exp}!!!")
+    ### If we come so far everything shoud be good ## Now let's give a try!!!!
+    
+    
+    
+    
+    
     
 
 if __name__ == "__main__":
@@ -76,6 +87,12 @@ if __name__ == "__main__":
         default = "report.csv",
         type = str,
         help = "Report file to be written"
+    )
+    parser.add_argument(
+        "--gpu",
+        default = 0,
+        type = int,
+        help = "CUDA device to use"
     )
     args = parser.parse_args()
     ### --- ###
