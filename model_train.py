@@ -2,7 +2,6 @@ import os
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-from layers import block, Upsampling, Linear
 from torch.utils.data import DataLoader
 from memmap_arrays import ts_concatted
 import numpy as np
@@ -82,13 +81,18 @@ class Trainer:
             if i % 10 == 0:
                 print(f"{i}th batch passed, it takes {q} to pass a batch!!!, the loss is {temp_loss}, lr is {self.scheduler.get_last_lr()}")
 
-    def _save_snapshot(self, epoch):
-        snapshot = {
+    def _save_snapshot(self, epoch, use_model = False):
+        ## In the case that you would like to save the model using model's save function
+        ## you know what the heck you are supposed to do!!!!
+        if not use_model:
+            snapshot = {
             "MODEL_STATE": self.model.module.state_dict(),
             "OPTIMIZATION_STATE": self.optimizer.state_dict(),
             "EPOCHS_RUN": epoch,
-        }
-        torch.save(snapshot, self.snapshot_path)
+            }
+            torch.save(snapshot, self.snapshot_path)
+        else:
+            self.model.save_model(self.snapshot_path)
         print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
     def train(self, max_epochs: int):
