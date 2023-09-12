@@ -50,15 +50,14 @@ if __name__ == "__main__":
         "--lags",
         default=513,
         type=str,
-        help="lenghts of concatted time series",
-        ### Here 512 +1 --- 1 is saved for the next days prediction!!!
+        help="lags to be used",
+        ### Here 512 + 1 --- here 1 is saved for the next days prediction!!!
     )
     parser.add_argument(
         "--batch_size",
         default = 256,
         type=str,
         help="lenghts of concatted time series",
-        ### Here 512 +1 --- 1 is saved for the next days prediction!!!
     )
     parser.add_argument(
         "--config_file",
@@ -66,7 +65,7 @@ if __name__ == "__main__":
         help = "config file for th emodel"
     )
     parser.add_argument(
-        "--repot_file",
+        "--report_file",
         type = str,
         help = "Report file to be written"
     )
