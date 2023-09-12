@@ -1,3 +1,4 @@
+import os
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
@@ -12,130 +13,146 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 
 
-
-
-
-
 ## This is important in the case that you compile the model!!!!
 torch.set_float32_matmul_precision("high")
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
+def return_dataset(**kwargs):
+    memmap_data = np.memmap(kwargs["file"], dtype=np.float32)
+    memmap_lengths = np.memmap(kwargs["length_file"], dtype=np.int32)
+    lags = kwargs["lags"]
+    lags = [lags for _ in memmap_lengths]
+    data_ = ts_concatted(**{"array":memmap_data, "lengths": memmap_lengths, "lags": lags})
+    return data_
 
-def data_loader(**kwargs):
-    pass
+def data_loader(data, **kwargs):
+    return DataLoader(data, **kwargs)
 
-def train_model(model:nn.Module, train_data:DataLoader, optimizer):
-    pass
+class Trainer:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        train_data: DataLoader,
+        val_data: DataLoader,
+        optimizer: torch.optim.Optimizer,
+        scheduler,
+        save_every: int,
+        snapshot_path: str,
+        loss_loger = None,
+        compile_model = False,
+    ) -> None:
+        self.gpu_id = int(os.environ["LOCAL_RANK"])
+        self.model = model.to(self.gpu_id)
+        if compile_model:
+            self.model = torch.compile(self.model)
+        ## -- ##
+        self.train_data = train_data
+        self.val_data = val_data
+        ## -- ##
+        self.optimizer = optimizer
+        self.scaler = torch.cuda.amp.GradScaler(enabled= True)
+        self.scheduler = scheduler
+        ## -- ##
+        self.save_every = save_every
+        ## -- ##
+        self.snapshot_path = snapshot_path
+        if os.path.exists(snapshot_path):
+            print("Loading snapshot")
+            self._load_snapshot(snapshot_path)
 
-def validate_model(model:nn.Module, validate_data:DataLoader):
-    pass
+    def _run_epoch(self):
+        for i, (x, y, tse) in enumerate(self.train_data):
+            self.model.train()
+            temp_loss = 0.1
+            counter = 0
+            m = time.time()
+            x, y, tse = map(lambda x: x.cuda(self.gpu_id).unsqueeze(1), [x, y, tse])
+            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
+                output = self.model((x, tse))
+                loss = F.mse_loss(output, y)
+            self.scaler.scale(loss).backward()
+            self.scaler.step(self.optimizer)
+            self.scaler.update()
+            self.scheduler.step()
+            self.optimizer.zero_grad()
+            ### Let's start the training ###
+            counter += 1
+            temp_loss -= (temp_loss - loss.item()) / counter
+            q = time.time() - m
+            if i % 10 == 0:
+                print(f"{i}th batch passed, it takes {q} to pass a batch!!!, the loss is {temp_loss}, lr is {self.scheduler.get_last_lr()}")
+
+    def _save_snapshot(self, epoch):
+        snapshot = {
+            "MODEL_STATE": self.model.module.state_dict(),
+            "OPTIMIZATION_STATE": self.optimizer.state_dict(),
+            "EPOCHS_RUN": epoch,
+        }
+        torch.save(snapshot, self.snapshot_path)
+        print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
+
+    def train(self, max_epochs: int):
+        for epoch in range(max_epochs):
+            self._run_epoch()
+            if epoch % self.save_every == 0:
+                self._save_snapshot(epoch)
+                
+    def validate(self):
+        with torch.no_grad():
+            temp_loss = 0
+            counter = 0
+            for i, (x, y, tse) in enumerate(self.val_data):
+                x, y, tse = map(lambda x: x.cuda(self.gpu_id).unsqueeze(1), [x, y, tse])
+                output = self.model((x, tse))
+                loss = nn.MSELoss()(output, y)
+                counter += 1
+                temp_loss -= (temp_loss - loss) / counter
+                if i % 10 == 0:
+                    print(temp_loss.item())       
+        return temp_loss
 
 
 @hydra.main(version_base=None, config_path=".", config_name="model_config")
 def main(cfg : DictConfig):
-    trainer_config, model_config, optimizer_config, technical_stuff = cfg["trainer_config"], cfg["model_config"], cfg["optimizer_config"], cfg["technical_stuff"]
-      
-    
-    seed = technical_stuff["seed"]
-    device = technical_stuff["device"]
-    ### let's get started ### -- let's create the model
-    torch.manual_seed(seed)
+    ## model configuration ##
+    model_config, optimizer_config, scheduler_config = cfg["model_config"], cfg["optimizer_config"], cfg["scheduler_config"]
+    snapshot_path = cfg["snapshot_path"]
+    save_every = cfg["save_every"]
+    ## model_config -- optimizer config -- scheduler config ##
+    torch.manual_seed(0)
     model = Model(**model_config)
-    ###
-    model = model.cuda(device)
-    ### 
-        
-    return model
-    ## Here we create the model!!!
+    os.environ["LOCAL_RANK"] = cfg["local_rank"]
+
     
+    ### We now do some data_stuff ###
+    train_dataset, val_dataset = cfg["data"]["train_path"], cfg["data"]["val_path"]
+    train_data_kwargs, val_data_kwargs = cfg["data"]["train_data_details"], cfg["data"]["val_data_details"]
+    train_data = return_dataset(**train_dataset)
+    validation_data = return_dataset(**val_dataset)
+    train_dataloader = data_loader(train_data, **train_data_kwargs)
+    val_dataloader = data_loader(validation_data, **val_data_kwargs)
+    print(f"Note that the train dataset contains {len(train_dataloader)}! batches!!")
+    ### --- End of data grabbing --- ###
     
-    t = model.cuda(1)
-    t = torch.compile(t)
-    try:
-        t.load_state_dict(torch.load("model_on_train_one_epoch0.trc"))
-    except Exception as exp:
-        print("Something went wrong bro!!!", exp)
-    #print(t((torch.randn(1, 1, 512, device=device), torch.tensor([[2]], device=device))))
-
-
-    memmap_data = np.memmap("array_train.dat", dtype=np.float32)
-    memmap_lengths = np.memmap("lengthsarray_train.dat", dtype=np.int32)
-    lags = [513 for _ in memmap_lengths]
-
-    data = ts_concatted(array=memmap_data, lengths=memmap_lengths, lags=lags)
-    train_dataloader = DataLoader(data, batch_size=256, shuffle=True)
-    optimizer = torch.optim.SGD(t.parameters(), lr=0.00001)
-    try:
-        optimizer.load_state_dict(torch.load("model_on_train_state0.trc"))
-    except Exception as exp:
-        print(exp)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15)
-    # Creates a GradScaler once at the beginning of training.
-    scaler = torch.cuda.amp.GradScaler()
-    ### 
-
-    for j in range(1,3):
-          
-        temp_loss = 0.1
-        counter = 0
-        a = time.time()
-        for i, (x, y, tse) in enumerate(train_dataloader):
-            m = time.time()
-            x, y, tse = map(lambda x: x.cuda(1).unsqueeze(1), [x, y, tse])
-            
-            loss = torch.tensor([0], dtype=torch.float32).cuda(0)
-            
-            with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
-                output = t((x, tse))
-                loss = nn.MSELoss()(output, y)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
-            scheduler.step()
-            optimizer.zero_grad()
-
-            ### mean loss calculation ###
-            counter += 1
-            temp_loss -= (temp_loss - loss.item()) / counter
-            q = time.time() - m
-            if i % 30 == 0:
-                print(
-                    f"Batch num {i}, The loss is {temp_loss:0.2f}, time to pass a single batch {q}, current lr is {scheduler.get_last_lr()}"
-                )
-        torch.save(t.state_dict(), f"model_on_train_one_epoch{j}.trc")
-        torch.save(optimizer.state_dict(), f"model_on_train_state{j}.trc")
-            
-        ### One batch takes at most 0.31 seconds with size 256 -- this number is the same as picking a batch from random array
-        ### so no bottleneck in the pipeline!!!!
-        ### If we do not compile the model then it takes .47 (if you do so .32 seconds on A2000 gpu (a bit less on 3060)) seconds to pass a batch!!!!
-        ### 12773226/256 = 49896 batches, therefore one epoch will take 49896*0.32/60 = 266 (float32) minutes (182.95 in mixed precision)
-        ### therefore one epoch will take 4.4 hours (3 hours mixed precision) which is good I believe. torch.compile saves %35 accelation.
-        print(
-            f"The loss is {temp_loss:0.2f} and epoch {j}, {time.time() - a}   seconds to pass,"
-        )
+    ### Optimizer ###
+    optimizer = torch.optim.SGD(model.parameters(), **optimizer_config)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, **scheduler_config)
+    ### Training Stuff Here it comes ###
     
-    ### For testing purposes only
-    memmap_data = np.memmap("array_test.dat", dtype=np.float32)
-    memmap_lengths = np.memmap("lengthsarray_test.dat", dtype=np.int32)
-    lags = [513 for _ in memmap_lengths]
+    trainer = Trainer(model = model, 
+            train_data= train_dataloader,
+            val_data = val_dataloader,
+            optimizer = optimizer, 
+            scheduler = scheduler,
+            save_every = save_every,
+            snapshot_path=snapshot_path,
+            compile_model=cfg["compile_model"],
+            
+    )
+    
+    trainer.train(max_epochs = 2)
+    trainer.validate()
 
-    data = ts_concatted(array=memmap_data, lengths=memmap_lengths, lags=lags)
-    test_dataloader = DataLoader(data, batch_size=256, shuffle=False, num_workers=5)
-
-    temp_loss = 1e-5
-    counter = 0
-
-    with torch.no_grad():
-        for i, (x, y, tse) in enumerate(test_dataloader):
-            x, y, tse = map(lambda x: x.cuda(1).unsqueeze(1), [x, y, tse])
-            loss = torch.tensor([0], dtype=torch.float32).cuda(1)
-            output = t((x, tse))
-            loss = nn.MSELoss()(output, y)
-            counter += 1
-            temp_loss -= (temp_loss - loss) / counter
-            if i % 100 == 0:
-                print(temp_loss.item())
-
+    
 if __name__ == '__main__':
     main()

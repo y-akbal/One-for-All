@@ -99,7 +99,7 @@ class Trainer:
 
     def validate(self):
         self.model.eval()
-        with torch.no_grad():  ## block traking gradients
+        with torch.no_grad():  ## block tracking gradients
             for source, targets in self.val_data:
                 source = source.to(self.gpu_id)
                 targets = targets.to(self.gpu_id)
