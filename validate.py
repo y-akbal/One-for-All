@@ -74,12 +74,22 @@ def main(**kwargs):
     except Exception as exp:
         print(f"Something went wrong with {exp}!!!")
     ### If we come so far everything shoud be good ## Now let's give a try!!!!
+    
+    ### you may wish to create and empty list here!!!
+    ### you then concat the corresponding numpy arrays
+    
+
+
     with torch.no_grad():
         for i, batch in enumerate(batched_data):
             x,y,tse = batch
             x, y, tse = map(lambda x: x.cuda(device).unsqueeze(1), [x, y, tse])
             y_out = model((x,tse))
             ### let's move on!!!
+            ### tse is importand because we shall use this to get the name of the station
+            ### therefore you gotta save tse value -- and the corresponding place_ -- to retrieve the names
+            ### of the station later on!!1
+    
 
     
 
