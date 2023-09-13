@@ -120,6 +120,8 @@ if __name__ == "__main__":
         default = 0,
         type = int,
         help = "CUDA device to use"
+        ## for validation we shall use a single GPU, as our model will fit into a single
+        ## GPU.
     )
     args = parser.parse_args()
     ### --- ###
