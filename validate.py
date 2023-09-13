@@ -15,31 +15,46 @@ model = nn.Sequential(*[
     nn.Linear(100,10),
     nn.GELU(),
     nn.Linear(10, 10)
-])    
+])
 
+X = np.random.normal(size = (1000, 100)).astype(np.float32)
+with torch.no_grad():
+    y = model(torch.tensor(X, dtype = torch.float32)).numpy()
 
 class dd(Dataset):
     def __init__(self):
-        self.X = np.random.randn(1000, 100)
-        self.y = np.random.randn(1000, 10)
+        self.X = X
+        self.y = y
     def __getitem__(self, i):
-        return self.X[i], self.y[i]
+        return torch.tensor(self.X[i], dtype = torch.float32), torch.tensor(self.y[i], dtype = torch.float32)
     def __len__(self):
         return len(self.X)
 d = dd()
+<<<<<<< HEAD
 data = DataLoader(d, 32, drop_last = False, shuffle = False)
 
 
 y_out = np.zeros((1000, 10), dtype = np.float64)
 y_test = np.zeros((1000, 10), dtype = np.float64)
+=======
+data = DataLoader(d, batch_size = 32, shuffle = False)
+
+y_out = np.zeros(d.y.shape)
+>>>>>>> 064a3b4 (Great Success!)
 with torch.no_grad():
     for i, (x,y) in enumerate(data):
-        
-        y_out[i*32:(i+1)*32] = np.array(model(x), dtype = np.float64)
-        y_test[i*32:(i+1)*32] = np.array(y, dtype = np.float64)
+        y_output = model(x).numpy()
+        y_out[32*i:32*(i+1)] = y_output
+## okito dokito        
 
+
+
+
+<<<<<<< HEAD
 y_test.shape   
 
+=======
+>>>>>>> 064a3b4 (Great Success!)
 
 def return_dataset(**kwargs):
     memmap_data = np.memmap(kwargs["file"], dtype=np.float32)
