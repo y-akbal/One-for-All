@@ -74,7 +74,12 @@ def main(**kwargs):
     except Exception as exp:
         print(f"Something went wrong with {exp}!!!")
     ### If we come so far everything shoud be good ## Now let's give a try!!!!
-    
+    with torch.no_grad():
+        for i, batch in enumerate(batched_data):
+            x,y,tse = batch
+            x, y, tse = map(lambda x: x.cuda(device).unsqueeze(1), [x, y, tse])
+            y_out = model((x,tse))
+            ### let's move on!!!
 
     
 
