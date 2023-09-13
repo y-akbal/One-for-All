@@ -30,31 +30,18 @@ class dd(Dataset):
     def __len__(self):
         return len(self.X)
 d = dd()
-<<<<<<< HEAD
-data = DataLoader(d, 32, drop_last = False, shuffle = False)
-
-
-y_out = np.zeros((1000, 10), dtype = np.float64)
-y_test = np.zeros((1000, 10), dtype = np.float64)
-=======
 data = DataLoader(d, batch_size = 32, shuffle = False)
 
 y_out = np.zeros(d.y.shape)
->>>>>>> 064a3b4 (Great Success!)
 with torch.no_grad():
     for i, (x,y) in enumerate(data):
         y_output = model(x).numpy()
         y_out[32*i:32*(i+1)] = y_output
 ## okito dokito        
 
+np.isclose(y_out, d.y) ### great succeesss!!!!
 
 
-
-<<<<<<< HEAD
-y_test.shape   
-
-=======
->>>>>>> 064a3b4 (Great Success!)
 
 def return_dataset(**kwargs):
     memmap_data = np.memmap(kwargs["file"], dtype=np.float32)
@@ -135,8 +122,6 @@ if __name__ == "__main__":
         default = 0,
         type = int,
         help = "CUDA device to use"
-        ## for validation we shall use a single GPU, as our model will fit into a single
-        ## GPU.
     )
     args = parser.parse_args()
     ### --- ###
