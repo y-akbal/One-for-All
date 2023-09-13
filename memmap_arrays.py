@@ -46,7 +46,7 @@ class ts_concatted:
         with open(self.file_names, mode = "r") as file:
             file_names = file.readlines()
         file_names_mapped = list(map(self.__preprocess_file_names__, file_names))
-        self.__file_names__ = {i: file_names_mapped[i] for i, _ in enumerate(lengths)}
+        self.__file_names__ = {i: file_names_mapped[i] for i, _ in enumerate(self.lengths)}
         
     
     def __preprocess_file_names__(self, file_name:str) -> str:
