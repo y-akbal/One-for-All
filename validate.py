@@ -59,7 +59,7 @@ def main(**kwargs):
     2) Load the data -- ok
     2.5) Save the prediceted and the ground truth
     3) Create a csv file
-    4) Compare it with others
+    4) Do the metric computations
     """
     ### First grab the data:
     data = return_dataset(**kwargs)
@@ -75,6 +75,13 @@ def main(**kwargs):
         print(f"Something went wrong with {exp}!!!")
     ### If we come so far everything shoud be good ## Now let's give a try!!!!
     
+
+    
+
+
+
+    ###Our metrics will be R^2, MAE, MSE ###
+    ### We shall give R^2 for each different city, as this is important to mention ###
     
     
         
