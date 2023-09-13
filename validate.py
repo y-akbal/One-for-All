@@ -27,18 +27,19 @@ class dd(Dataset):
     def __len__(self):
         return len(self.X)
 d = dd()
-data = DataLoader(d, 32, drop_last = True, shuffle = False)
+data = DataLoader(d, 32, drop_last = False, shuffle = False)
 
 
-y_out = np.random.randn(1000, 10)
-y_test = np.random.randn(1000, 10)
+y_out = np.zeros((1000, 10), dtype = np.float64)
+y_test = np.zeros((1000, 10), dtype = np.float64)
 with torch.no_grad():
     for i, (x,y) in enumerate(data):
         
         y_out[i*32:(i+1)*32] = np.array(model(x), dtype = np.float64)
         y_test[i*32:(i+1)*32] = np.array(y, dtype = np.float64)
 
-torch.randn(10,10).numpy()
+y_test.shape   
+
 
 def return_dataset(**kwargs):
     memmap_data = np.memmap(kwargs["file"], dtype=np.float32)
