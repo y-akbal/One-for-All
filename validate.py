@@ -51,6 +51,12 @@ def return_dataset(**kwargs):
     data_ = ts_concatted(**{"array":memmap_data, "lengths": memmap_lengths, "lags": lags})
     return data_
 
+def return_metrics(y_real:np.ndarray, y_pred:np.ndarray):
+    """
+    Given an array of numpy returns some metrics, such as R^2, MAE, MSE, MAPE
+    """
+    pass
+
 
 def main(**kwargs):
     """
@@ -89,7 +95,7 @@ def main(**kwargs):
             ### tse is importand because we shall use this to get the name of the station
             ### therefore you gotta save tse value -- and the corresponding place_ -- to retrieve the names
             ### of the station later on!!1
-    
+
 
     
 
