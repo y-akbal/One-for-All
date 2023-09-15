@@ -54,3 +54,4 @@ if __name__ == "__main__":
         args=(world_size, t),
         nprocs=world_size,
     )
+
