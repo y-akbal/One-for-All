@@ -95,9 +95,14 @@ def main(**kwargs):
                 Y_output.append(y_output)
                 Y.append(y)
                 TSE.append(tse.to("cpu").numpy())
-    ## We next convert everything into a np array!!!
-    Y_output,  Y, TSE = map(lambda x: np.array(x), [Y_output,  Y, TSE])
-    ### We now convert everything into a csv file!!!, 
+    ## We next convert everything into a np array--!!!
+    map_array = map(lambda x: np.array(x), [Y_output,  Y, TSE])
+    dict_ = {name:array for name, array in zip(["Y_output",  "Y", "TSE"], map_array)}
+    data_frame = pd.DataFrame().from_dict(dict_)
+    data_frame = data_frame.transpose()
+    data_frame.to_csv("results.csv")
+    ### We now convert everything into a csv file--!!!
+    
     
     
     
