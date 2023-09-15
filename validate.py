@@ -81,13 +81,22 @@ def main(**kwargs):
         print(f"Something went wrong with {exp}!!!")
     ## -- ##
     ### If we come so far everything shoud be good ## Let's run one and one epoch!!!
+    ### I know that this is not the best way to do this but I promise to fix it later...            
+    Y_output = []
+    Y = []
+    TSE = []
     
     with torch.no_grad():
         for i, (x, y, tse) in enumerate(batched_data):
-                x, y, tse = map(lambda x: x.to(device).unsqueeze(1), [x, y, tse])
+                x, tse = map(lambda x: x.to(device).unsqueeze(1), [x, tse])
                 y_output = model((x, tse))
                 y_output = y_output.to("cpu").numpy()
-                
+                Y_output.append(y_output)
+                Y.append(y)
+                TSE.append(tse.to("cpu").numpy())
+    ## We next convert everything into a np array!!!
+    Y_output,  Y, TSE = map(lambda x: np.array(x), [Y_output,  Y, TSE])
+    ### We now convert everything into a csv file!!!, 
     
     
     
