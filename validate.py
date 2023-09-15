@@ -21,6 +21,7 @@ X = np.random.normal(size = (1000, 100)).astype(np.float32)
 with torch.no_grad():
     y = model(torch.tensor(X, dtype = torch.float32)).numpy()
 
+
 class dd(Dataset):
     def __init__(self):
         self.X = X
@@ -33,6 +34,7 @@ d = dd()
 data = DataLoader(d, batch_size = 32, shuffle = False)
 
 y_out = np.zeros(d.y.shape)
+l = []
 with torch.no_grad():
     for i, (x,y) in enumerate(data):
         y_output = model(x).numpy()
@@ -51,12 +53,6 @@ def return_dataset(**kwargs):
     data_ = ts_concatted(**{"array":memmap_data, "lengths": memmap_lengths, "lags": lags})
     return data_
 
-def return_metrics(y_real:np.ndarray, y_pred:np.ndarray):
-    """
-    Given an array of numpy returns some metrics, such as R^2, MAE, MSE, MAPE
-    """
-    pass
-
 
 def main(**kwargs):
     """
@@ -74,29 +70,27 @@ def main(**kwargs):
     ## -- ##
     ## Let's load the model from trained file ##    
     file_name = kwargs["file_name"]   
-    device =  kwargs["gpu"]
+    device =  "cuda" if torch.cuda.is_available() and kwargs["gpu"] else "cpu"
+    device = torch.device(device)
+    ## -- ## ok we now load the model!!!
     try:
-        model = Model.from_pretrained(file_name).cuda(device)
+        model = Model.from_pretrained(file_name).to(device)
+        model.evaluate()
+        print("Pretrained model loaded succesfully!!!")
     except Exception as exp:
         print(f"Something went wrong with {exp}!!!")
-    ### If we come so far everything shoud be good ## Now let's give a try!!!!
+    ## -- ##
+    ### If we come so far everything shoud be good ## Let's run one and one epoch!!!
     
-    ### you may wish to create and empty list here!!!
-    ### you then concat the corresponding numpy arrays
-    
-
-
     with torch.no_grad():
-        for i, batch in enumerate(batched_data):
-            x,y,tse = batch
-            x, y, tse = map(lambda x: x.cuda(device).unsqueeze(1), [x, y, tse])
-            y_out = model((x,tse))
-            ### let's move on!!!
-            ### tse is importand because we shall use this to get the name of the station
-            ### therefore you gotta save tse value -- and the corresponding place_ -- to retrieve the names
-            ### of the station later on!!1
-
-
+        for i, (x, y, tse) in enumerate(batched_data):
+                x, y, tse = map(lambda x: x.to(device).unsqueeze(1), [x, y, tse])
+                y_output = model((x, tse))
+                y_output = y_output.to("cpu").numpy()
+                
+    
+    
+    
     
 
 
