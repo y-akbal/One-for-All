@@ -10,7 +10,8 @@ import tqdm
 import pandas as pd
 import time
 
-
+"""
+## The idea is as follows:
 model = nn.Sequential(*[
     nn.Linear(100,10),
     nn.GELU(),
@@ -43,7 +44,7 @@ with torch.no_grad():
 
 np.isclose(y_out, d.y) ### great succeesss!!!!
 
-
+"""
 
 def return_dataset(**kwargs):
     memmap_data = np.memmap(kwargs["file"], dtype=np.float32)
