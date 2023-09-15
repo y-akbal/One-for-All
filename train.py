@@ -122,7 +122,7 @@ def load_train_objs(**train_objs):
     val_set = MyTrainDataset(2048)
 
     ### Define the model
-    torch.manual_seed(seed)
+    torch.manual_seed(10)
     model = nn.Sequential(
             torch.nn.Linear(20, 300),
             torch.nn.GELU(),

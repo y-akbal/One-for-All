@@ -126,7 +126,7 @@ def main(cfg : DictConfig):
     torch.manual_seed(0)
     model = Model(**model_config)
     os.environ["LOCAL_RANK"] = cfg["local_rank"]
-
+    ## -- ##
     
     ### We now do some data_stuff ###
     train_dataset, val_dataset = cfg["data"]["train_path"], cfg["data"]["val_path"]
