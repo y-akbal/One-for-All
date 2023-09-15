@@ -8,7 +8,7 @@ from memmap_arrays import ts_concatted
 import numpy as np
 import tqdm
 import pandas as pd
-import time
+
 
 """
 ## The idea is as follows:
@@ -82,7 +82,9 @@ def main(**kwargs):
         print(f"Something went wrong with {exp}!!!")
     ## -- ##
     ### If we come so far everything shoud be good ## Let's run one and one epoch!!!
-    ### I know that this is not the best way to do this but I promise to fix it later...            
+    ### I know that this is not the best way to do this but I promise to fix it later,
+    ### I need to at least train some model, to see how the things work in practice,
+    ###            
     Y_output = []
     Y = []
     TSE = []
