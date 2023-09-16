@@ -4,6 +4,7 @@ from torch.nn import functional as F
 from layers import block, Upsampling, Linear
 import pickle
 
+
 class Model(nn.Module):
     def __init__(
         self,
@@ -46,21 +47,20 @@ class Model(nn.Module):
         )
 
         ### This dude is the final linear
-        self.Linear = Linear(self.embedding_dim, 1, bias = True)
+        self.Linear = Linear(self.embedding_dim, 1)
         ###
         ### here is the config dict to be used
-        self.config = {"lags":lags, 
-                       "embedding_dim":embedding_dim,
-                       "n_blocks":n_blocks,
-                       "pool_size":pool_size,
-                       "number_of_heads":number_of_heads, 
-                       "number_ts":number_ts,
-                       "num_of_clusters":num_of_clusters,
-                       "channel_shuffle_group":channel_shuffle_group
-                       }
-        
-  
-        
+        self.config = {
+            "lags": lags,
+            "embedding_dim": embedding_dim,
+            "n_blocks": n_blocks,
+            "pool_size": pool_size,
+            "number_of_heads": number_of_heads,
+            "number_ts": number_ts,
+            "num_of_clusters": num_of_clusters,
+            "channel_shuffle_group": channel_shuffle_group,
+        }
+
     def forward(self, x):
         ## Here we go with upsampling layer
         if self.cluster_used:
@@ -73,42 +73,44 @@ class Model(nn.Module):
         ###
         x = self.blocks(x)
         return self.Linear(x)
-    
-    
-    @classmethod 
+
+    @classmethod
     def from_config_file(cls, config_file):
-        with open(config_file, mode = "rb") as file:
+        with open(config_file, mode="rb") as file:
             dict_ = pickle.load(file)
         if isinstance(dict_, dict):
             return cls(**dict_)
         else:
             raise ValueError("The pickled file should contain a config dictionary")
-    
-    ### Let's these dudes stay here for future versions, mostly for inference using single gpu!!! ###        
+
+    ### Let's these dudes stay here for future versions, mostly for inference using single gpu!!! ###
     @classmethod
     def from_pretrained(cls, file_name):
         try:
             dict_ = torch.load(file_name)
             config = dict_["config"]
             state_dict = dict_["state_dict"]
-            model = cls(**config)    
+            model = cls(**config)
             model.load_state_dict(state_dict)
-            print("Model loaded successfully!!!!")
+            print(
+                f"Model loaded successfully!!!! The current configuration is {config}"
+            )
+
         except Exception as e:
-            print(f"Something went wrong with {e}")        
+            print(f"Something went wrong with {e}")
         return model
-      
+
     @classmethod
     def from_data_class(cls, data_class):
         if isinstance(data_class, dict):
             return cls(**data_class)
         else:
             return cls(**data_class.__dict__)
-    
+
     def write_config_file(self, file_name):
-        with open(file_name, mode = "wb") as file:
-            pickle.dump(self.config,file)
-    
+        with open(file_name, mode="wb") as file:
+            pickle.dump(self.config, file)
+
     def save_model(self, file_name):
         fn = "Model" if file_name == None else file_name
         model = {}
@@ -116,24 +118,23 @@ class Model(nn.Module):
         model["config"] = self.config
         try:
             torch.save(model, f"{fn}")
-            print(f"Model saved succesfully, see the file {fn} for the weights and config file!!!")
+            print(
+                f"Model saved succesfully, see the file {fn} for the weights and config file!!!"
+            )
         except Exception as exp:
             print(f"Something went wrong with {exp}!!!!!")
-         
-       
 
 
 """
-model = Model()
-
-model = Model.from_pretrained("10epoch.pt")
+model = Model.from_pretrained("model.pt")
 model = Model.from_config_file("write_it.cfg")
+
+### --#-- ### 
+### --#-- ###
+### --#-- ###
 
 torch.manual_seed(0)
 model([torch.randn(1, 1, 512), torch.tensor([0])])
 
 model.save_model("10epoch.r")
-        
 """
-
-
