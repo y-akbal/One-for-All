@@ -45,8 +45,8 @@ class Model(nn.Module):
             channel_shuffle_group=channel_shuffle_group,
         )
 
-        ###
-        self.Linear = Linear(self.embedding_dim, 1)
+        ### This dude is the final linear
+        self.Linear = Linear(self.embedding_dim, 1, bias = True)
         ###
         ### here is the config dict to be used
         self.config = {"lags":lags, 
