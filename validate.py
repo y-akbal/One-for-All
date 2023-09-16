@@ -6,7 +6,7 @@ from torch.utils.data import DataLoader, Dataset
 from main_model import Model
 from memmap_arrays import ts_concatted
 import numpy as np
-import tqdm
+from tqdm import tqdm
 import pandas as pd
 
 
@@ -98,25 +98,33 @@ def main(**kwargs):
     Y_output = []
     Y = []
     TSE = []
-
+    data_ = tqdm(batched_data)
     with torch.no_grad():
-        for i, (x, y, tse) in enumerate(batched_data):
+        for x, y, tse in data_:
             x, tse = map(lambda x: x.to(device).unsqueeze(1), [x, tse])
             y_output = model((x, tse)).squeeze()
             y_output = y_output.to("cpu").numpy()
-            Y_output.append(y_output)
-            Y.append(y)
-            TSE.append(tse.to("cpu").numpy())
-            print(i, x.shape, y.shape, y_output.shape)
+            Y_output.append(y_output[:, -1])
+            Y.append(y[:, -1])
+            TSE.append(tse.squeeze().to("cpu").numpy())
+            # print(i, x.shape, y.shape, y_output.shape, tse.shape)
+
     ## -- ##
     ## We next convert everything into a np array--!!!
-    map_array = map(lambda x: np.array(x), [Y_output, Y, TSE])
-    dict_ = {name: array for name, array in zip(["Y_output", "Y", "TSE"], map_array)}
-    data_frame = pd.DataFrame().from_dict(dict_)
-    data_frame = data_frame.transpose()
-    data_frame.to_csv("results.csv")
-    ### We have now converted everything into a csv file--!!!
+    map_array = map(lambda x: np.array(x).flatten(), [Y_output, Y, TSE])
+    # for l in map_array:
+    #   print(l.shape)
+    dict_ = {name: array for name, array in zip(["TSE", "Y_output", "Y"], map_array)}
+    ### -- ###
 
+    data_frame = pd.DataFrame().from_dict(dict_)
+    try:
+        data_frame.to_csv("results.csv")
+    except Exception as e:
+        print(f"Something went wrong with {e}")
+    ### We have now converted everything into a csv file--!!!
+    ### -- ###
+    ### -- ###
     ###Our metrics will be R^2, MAE, MSE ###
     ### We shall give R^2 for each different city, as this is important to mention ###
 
