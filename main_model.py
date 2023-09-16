@@ -47,7 +47,7 @@ class Model(nn.Module):
         )
 
         ### This dude is the final linear
-        self.Linear = Linear(self.embedding_dim, 1)
+        self.Linear = Linear(self.embedding_dim, 1, bias = True)
         ###
         ### here is the config dict to be used
         self.config = {
