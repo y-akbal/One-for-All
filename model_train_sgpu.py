@@ -86,9 +86,10 @@ class Trainer:
         ## you know what the heck you are supposed to do!!!!
         if not use_model:
             snapshot = {
-            "MODEL_STATE": self.model.module.state_dict(),
-            "OPTIMIZATION_STATE": self.optimizer.state_dict(),
-            "EPOCHS_RUN": epoch,
+                "state_dict": self.model.module.state_dict(),
+                "optimization_state": self.optimizer.state_dict(),
+                "epochs_run": epoch,
+                "config": self.model.config,
             }
             torch.save(snapshot, self.snapshot_path)
         else:
