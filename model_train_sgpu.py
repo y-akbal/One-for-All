@@ -56,8 +56,11 @@ class Trainer:
         ## -- ##
         self.snapshot_path = snapshot_path
         if os.path.exists(snapshot_path):
-            print("Loading snapshot")
-            self._load_snapshot(snapshot_path)
+            try:
+                print("Loading snapshot")
+                self._load_snapshot(snapshot_path)
+            except Exception as e:
+                print(f"Something went wrong with {e}!!!")
 
     def _run_epoch(self):
         for i, (x, y, tse) in enumerate(self.train_data):
@@ -81,19 +84,14 @@ class Trainer:
             if i % 10 == 0:
                 print(f"{i}th batch passed, it takes {q} to pass a batch!!!, the loss is {temp_loss}, lr is {self.scheduler.get_last_lr()}")
 
-    def _save_snapshot(self, epoch, use_model = False):
-        ## In the case that you would like to save the model using model's save function
-        ## you know what the heck you are supposed to do!!!!
-        if not use_model:
-            snapshot = {
+    def _save_snapshot(self, epoch):
+        snapshot = {
                 "state_dict": self.model.module.state_dict(),
                 "optimization_state": self.optimizer.state_dict(),
                 "epochs_run": epoch,
                 "config": self.model.config,
             }
-            torch.save(snapshot, self.snapshot_path)
-        else:
-            self.model.save_model(self.snapshot_path)
+        torch.save(snapshot, self.snapshot_path)
         print(f"Epoch {epoch} | Training snapshot saved at {self.snapshot_path}")
 
     def train(self, max_epochs: int):

@@ -83,7 +83,8 @@ class Model(nn.Module):
         else:
             raise ValueError("The pickled file should contain a config dictionary")
 
-    ### Let's these dudes stay here for future versions, mostly for inference using single gpu!!! ###
+    ### These dudes stay here for future versions ### 
+    ###  mostly for inference using single gpu!!! ###
     @classmethod
     def from_pretrained(cls, file_name):
         try:
@@ -106,10 +107,6 @@ class Model(nn.Module):
             return cls(**data_class)
         else:
             return cls(**data_class.__dict__)
-
-    def write_config_file(self, file_name):
-        with open(file_name, mode="wb") as file:
-            pickle.dump(self.config, file)
 
     def save_model(self, file_name):
         fn = "Model" if file_name == None else file_name
