@@ -2,7 +2,6 @@ import os
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-import statsmodels
 from statsmodels.tsa.stattools import adfuller, arma_order_select_ic
 from convert_memmap import memmap_array
 
@@ -37,11 +36,11 @@ class CreationError(Exception):
         super().__init__(self.message)
 
 
-def get_csv_list() -> list:
+def get_csv_list(excluded_files:list = ["results.csv","results_scores.csv"]) -> list:
     list_ = os.listdir()
     csv = []
     for file in list_:
-        if file.endswith(".csv"):
+        if file.endswith(".csv") and file not in excluded_files:
             csv.append(file)
     return csv
 
@@ -73,12 +72,17 @@ def statistical_results(ts: pd.Series, advanced = False) -> dict:
     return statistic_dict
 
 
-def preprocess_csv(csv_file: str, numerical_column=-1) -> tuple:
+def preprocess_csv(csv_file: str, numerical_column:int=-1) -> tuple:
     pandas_frame = pd.read_csv(csv_file, encoding="ISO-8859-1", decimal=",")
-    pandas_frame = pandas_frame.loc[:, COLUMN_NAMES]
+    try:
+        pandas_frame = pandas_frame.loc[:, COLUMN_NAMES]
+    except Exception:
+        print(f"The file {csv_file} is probably corrupted!!!")
+        raise(Exception)
 
     numerical_series = pandas_frame.iloc[:, numerical_column].copy(deep=True)
     ### --- Some Preprocessing ---- ###
+    ### --- We eliminate negative values --- ### 
     numerical_series[numerical_series < 0] = np.nan
     numerical_series = numerical_series.interpolate(method="linear")
     pandas_frame.iloc[:, numerical_column] = numerical_series
@@ -86,7 +90,7 @@ def preprocess_csv(csv_file: str, numerical_column=-1) -> tuple:
     ### Normalizing stuff
     time_series = pandas_frame.iloc[:, numerical_column]  ### cleared time series
     #### Here we need to have p-values of unit-root tests, PACF results ACF results to get results on
-    statistics = statistical_results(time_series)
+    statistics:dict = statistical_results(time_series)
     
     mean = statistics["Mean"]
     std = statistics["Std"]

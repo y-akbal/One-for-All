@@ -13,7 +13,7 @@ class Model(nn.Module):
         n_blocks: int = 25,
         pool_size: int = 4,
         number_of_heads=8,
-        number_ts=25,
+        number_ts=25, ###This is needed for embeddings, you can have more than you need for fine tuning
         num_of_clusters=None,  ### number of clusters of times series
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
     ):

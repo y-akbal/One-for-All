@@ -1,16 +1,13 @@
 import concurrent.futures
-import math
 import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression
-from preprocess import get_csv_list, preprocess_csv
-import os
+from preprocess_train_test import get_csv_list, preprocess_csv
 import pandas as pd
-import pickle
-import time
+from matplotlib import pyplot as plt
 
 
-def return_split(ts: np.ndarray, split_ratio: float = 0.8, lags: int = 16):
+def return_split(ts: np.ndarray, split_ratio: float = 0.8, lags: int = 4):
     """_summary_
 
     Args:
@@ -46,7 +43,7 @@ def return_split(ts: np.ndarray, split_ratio: float = 0.8, lags: int = 16):
 def return_final_result(
     csv_file,
     split_ratio=0.8,
-    lags: int = 256,
+    lags: int = 16,
     numerical_column=-1,
     seed=0,
     regressor=LinearRegression,
@@ -63,50 +60,29 @@ def return_final_result(
     rf.fit(X_train, y_train)
     score = rf.score(X_test, y_test)
     print(f"{csv_file, score, len(numerical_ts)} Done")
-    return score, csv_file
+    return csv_file, score, numerical_ts
 
+def create_save_fig(scores:list):
+    plt.hist(scores, density = True, bins = 50, label = "R^2 values")
+    plt.legend()
+    plt.savefig('my_plot.png')
 
-def main():
+def main(score_fie = "score.csv"):
     csv_list = get_csv_list()
-    with concurrent.futures.ProcessPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=6) as executor:
         res = executor.map(return_final_result, csv_list)
-    return res
-
-
-def short(len_=2048):
-    list_ = get_csv_list()
-    names = []
-    lengths = []
-    for csv_fil in list_:
-        pd_ser = pd.read_csv(csv_fil, encoding="ISO-8859-1", decimal=",")
-        len__ = len(pd_ser)
-        if len__ < len_:
-            names.append(csv_fil)
-            lengths.append(len__)
-    return names, lengths
-
-
-def return_average(file="pickled.t"):
-    with open(file, "rb") as file_:
-        L = pickle.load(file_)
-    temp_av = 1e-2
-    k = 0
-    list_outlier = []
-    for M in L:
-        value, name = M
-        if 0 < value < 1:
-            temp_av += value
-            k += 1
-        else:
-            list_outlier.append(name)
-    return temp_av / k, list_outlier
-
+    
+    scores = {}
+    score_vals = []
+    for csv_file, score, len_ in res:
+        scores[csv_file] = score
+        score_vals.append(float(score))
+    
+    data_frame = pd.DataFrame().from_dict(scores, orient = "index")
+    data_frame.to_csv("results_scores.csv")
+    ## -- ##
+    create_save_fig(score_vals)
+    return None
 
 if __name__ == "__main__":
-    a = time.time()
-    res = main()
-    list_ = list(res)
-    with open("pickled.t", mode="wb") as file:
-        pickle.dump(list_, file)
-    av = return_average()
-    print(av)
+    main()
