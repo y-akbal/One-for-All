@@ -55,6 +55,12 @@ class ts_concatted:
     def return_file_names(self, place:int) -> str:
         return self.__file_names__[place]
         
+
+def return_train_val_sets(train_name, val_name):
+    return None
+
+
+
 """
 lags =  [512 for _ in np.memmap("lengthsarray_train.dat", dtype = np.uint32)]
 lengths = np.memmap("lengthsarray_train.dat", dtype = np.uint32)
