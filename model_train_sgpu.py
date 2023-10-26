@@ -3,7 +3,7 @@ import torch
 from torch import nn as nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
-from memmap_arrays import ts_concatted
+from dataset_generator import ts_concatted
 import numpy as np
 import time
 from main_model import Model

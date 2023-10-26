@@ -1,8 +1,6 @@
-import os
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 
@@ -16,17 +14,18 @@ class Trainer:
         scheduler: torch.optim.lr_scheduler,
         gpu_id: int,
         save_every: int,
-        val_loss_logger=None,
-        train_loss_logger=None,
-        val_accuracy_logger=None,
-        compile=False,
-        use_wnb = True,
+        val_loss_logger = None,
+        train_loss_logger = None,
+        val_accuracy_logger = None,
+        compile = False,
+        use_wnb = False,
+        use_DDP = True,
     ) -> None:
         self.gpu_id = gpu_id
         self.model_config = model.config
         self.model = model.to(gpu_id)
-        self.model = DDP(self.model, device_ids=[gpu_id], find_unused_parameters=True)
-
+        if use_DDP:
+            self.model = DDP(self.model, device_ids=[gpu_id])
         if compile:
             self.model = torch.compile(self.model)
         ##
@@ -47,11 +46,11 @@ class Trainer:
         self.autocast = torch.autocast
         self.scaler = torch.cuda.amp.GradScaler()
         ## training details ##
-        self.current_epoch = 1
+        self.epoch = 1
 
         try:
             self._load_checkpoint("checkpoint.pt")
-            print("Started from where we stopped last time!!!")
+            print(f"Started from {self.epoch} -- where stopped last time!!!")
         except Exception as e:
             print(f"There is a problem with loading the model weights and the problem is: {e}")
         
@@ -85,21 +84,22 @@ class Trainer:
             self._run_batch(source, targets, i)
 
     def train(self, max_epochs: int):
-        for epoch in range(max_epochs):
+        for epoch in range(self.epoch, max_epochs):
             self._run_epoch(epoch)
+            self.epoch = epoch #update epoch!!!             
             if self.gpu_id == 0 and epoch % self.save_every == 0:
                self._save_checkpoint(epoch)
             self.validate()
 
     def validate(self):
         if self.gpu_id == 0:
-            print("Validation is started!!!")
+            print("Validation started!!!")
         self.model.eval()
         with torch.no_grad():  ## block tracking gradients
             for source, targets, _ in self.val_data:
                 source = source.to(self.gpu_id)
                 targets = targets.to(self.gpu_id)
-                output = self.model(source, task = None)  
+                output = self.model(source)  
                 loss = F.mse_loss(output, targets)
                 self.val_loss_logger.update(loss.item())
                 
@@ -113,6 +113,7 @@ class Trainer:
                 
                 self.val_loss_logger.reset()
                 self.val_accuracy_logger.reset()    
+
     ## Some tools ## 
     def _load_checkpoint(self, checkpoint_file):
         model_dict = torch.load(checkpoint_file)
@@ -120,28 +121,29 @@ class Trainer:
         model_state_dict = model_dict["model_state_dict"]
         model_optimizer_state = model_dict["optimizer_state"]
         ### ---Let's load the model states--- ###
-        #self.model = self.model.from_dict(model_config)
         self.model.load_state_dict(model_state_dict)
         self.optimizer.load_state_dict(model_optimizer_state)
+        self.epoch = model_dict["epoch"]
         print("Loaded the new model!!!!")
  
-    def _save_checkpoint(self, epoch):
+    def _save_checkpoint(self):
         ### This are the necessary steps to recover the model from the pickled file!!!
         model_weights = self.model.state_dict()
         model_config = self.model_config
         optimizer_state = self.optimizer.state_dict()
 
-        checkpoint = {"model_state_dict":model_weights,
+        checkpoint = {
+                      "model_state_dict":model_weights,
                       "model_config":model_config,
                       "optimizer_state":optimizer_state,
-                      "epoch":epoch
+                      "epoch":self.epoch
                     }
         try:
             PATH = "checkpoint.pt"
             torch.save(checkpoint, PATH)        
-            print(f"Epoch {epoch} | Training checkpoint saved at {PATH}")
+            print(f"Epoch {self.epoch} | Training checkpoint saved at {PATH}")
         except Exception as exp:
-            print(f"Something went wrong with {exp}, the training will start from begining!!!")
+            print(f"Something went wrong with {exp}!!!")
     
 
 

@@ -4,7 +4,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 from main_model import Model
-from memmap_arrays import ts_concatted
+from dataset_generator import ts_concatted
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
