@@ -63,7 +63,9 @@ def return_final_result(
     return csv_file, score, numerical_ts
 
 def create_save_fig(scores:list):
-    plt.hist(scores, density = True, bins = 50, label = "R^2 values")
+    mean = np.mean(scores)
+    std = np.std(scores, ddof = 1)
+    plt.hist(scores, density = True, bins = 50, label = f"R^2 values with mean {mean:0.3f} and std {std:0.3f}")
     plt.legend()
     plt.savefig('my_plot.png')
 
