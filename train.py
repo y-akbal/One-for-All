@@ -160,7 +160,7 @@ def main(
     ddp_setup(rank, world_size)
 
     ## load the model
-    train_data, val_data, model, optimizer = load_train_objs()
+    train_data, val_data, model, optimizer, scheduler = load_train_objs()
     ## train_data, val_data should be dict containing some necessary information...
 
     ## load the data

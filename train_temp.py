@@ -40,7 +40,7 @@ class Trainer:
         save_every: int,
         val_loss_logger=None,
         train_loss_logger=None,
-        compile=True
+        compile=False
         # tracker ## this dude is for tracking stuff
     ) -> None:
         self.gpu_id = gpu_id
