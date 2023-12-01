@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 from statsmodels.tsa.stattools import adfuller, arma_order_select_ic
-from convert_memmap import memmap_array
+from preprocessor.convert_memmap import memmap_array
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -49,7 +49,7 @@ def statistical_results(ts: pd.Series, advanced = False) -> dict:
     ### here you write all statistical properties of your time series
     ##below we collect necessary statistics
     if advanced:
-        ord = arma_order_select_ic(ts[:2000], max_ar=6, max_ma=4, ic=["aic", "bic"])
+        ord = arma_order_select_ic(ts[:2000], max_ar=10, max_ma=2, ic=["aic", "bic"])
         statistic_dict = {
             "Mean": ts.mean(),
             "Std": ts.std(ddof=1),
