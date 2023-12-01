@@ -8,8 +8,8 @@ import time
 #### Convention here we use: BxHxW ---- W here refers to the lags of the time series,
 #### H refers to population of lags via layers
 #### On time permitting https://pytorch.org/docs/stable/nn.init.html
-### Look at the above initializations as He initialization may sound better, for the first layers
-## If possible do torch.compile(model), things go brrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr
+### will look at the above initializations as He initialization may sound better, for the first layers
+## If possible do torch.compile(model), things go damn fast!!! furious....
 
 
 class Linear(

@@ -1,4 +1,6 @@
 import numpy as np
+import torch
+from torch.data.utils import DataLoader
 
 
 class ts_concatted:
@@ -54,10 +56,20 @@ class ts_concatted:
 
     def return_file_names(self, place:int) -> str:
         return self.__file_names__[place]
-        
 
-def return_train_val_sets(train_name, val_name):
-    return None
+     
+        
+def return_dataset(**kwargs):
+    memmap_data = np.memmap(kwargs["file"], dtype=np.float32)
+    memmap_lengths = np.memmap(kwargs["length_file"], dtype=np.int32)
+    lags = kwargs["lags"]
+    lags = [lags for _ in memmap_lengths]
+    data_ = ts_concatted(**{"array":memmap_data, "lengths": memmap_lengths, "lags": lags})
+    return data_
+
+def data_loader(data, **kwargs):
+    return DataLoader(data, **kwargs)
+
 
 
 
