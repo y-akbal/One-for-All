@@ -2,15 +2,18 @@ model_config:
   number_ts: 264
   embedding_dim: 512
   n_blocks: 12
+#  dropout: 0.2
   pool_size: 4
   number_of_heads: 4
 
+trainer_config:
+  compile_model: True
+  snapshot_path: "/model"
+  snapshot_name: "small_model"
+  save_every: 1
+  max_epochs: 5
 
-compile_model: True
-snapshot_path: "/model"
-save_every: 150
-epochs: 4
-local_rank: "0"
+  
   
 optimizer_config:
   lr: 0.000001
