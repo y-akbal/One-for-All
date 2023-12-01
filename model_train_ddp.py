@@ -16,7 +16,6 @@ class Trainer:
         save_every: int,
         val_loss_logger = None,
         train_loss_logger = None,
-        val_accuracy_logger = None,
         compile = False,
         use_wnb = False,
         use_DDP = True,
@@ -39,7 +38,6 @@ class Trainer:
         ##
         self.val_loss_logger = val_loss_logger
         self.train_loss_logger = train_loss_logger
-        self.val_accuracy_logger = val_accuracy_logger
         self.use_wnb = use_wnb
         ##
         ##
@@ -78,7 +76,7 @@ class Trainer:
             print(f"[GPU{self.gpu_id}] Epoch {epoch}")
         self.train_data.sampler.set_epoch(epoch)
 
-        for i, (source, targets) in enumerate(self.train_data):
+        for i, (source, targets, cls_, file_name) in enumerate(self.train_data):
             source = source.to(self.gpu_id, non_blocking=True)
             targets = targets.to(self.gpu_id, non_blocking=True)
             self._run_batch(source, targets, i)
@@ -96,7 +94,7 @@ class Trainer:
             print("Validation started!!!")
         self.model.eval()
         with torch.no_grad():  ## block tracking gradients
-            for source, targets, _ in self.val_data:
+            for source, targets, cls_, file_name in self.val_data:
                 source = source.to(self.gpu_id)
                 targets = targets.to(self.gpu_id)
                 output = self.model(source)  
@@ -116,26 +114,32 @@ class Trainer:
 
     ## Some tools ## 
     def _load_checkpoint(self, checkpoint_file):
-        model_dict = torch.load(checkpoint_file)
+        state_dict = torch.load(checkpoint_file)
+        ## Where we stopped at?
+        self.epoch = state_dict["epoch"]
         ### Now the state dict are obtained below ###
-        model_state_dict = model_dict["model_state_dict"]
-        model_optimizer_state = model_dict["optimizer_state"]
+        model_state_dict = state_dict["model_state_dict"]
+        optimizer_state = state_dict["optimizer_state"]
+        scheduler_state = state_dict["scheduler_state"]
+        
         ### ---Let's load the model states--- ###
         self.model.load_state_dict(model_state_dict)
-        self.optimizer.load_state_dict(model_optimizer_state)
-        self.epoch = model_dict["epoch"]
-        print("Loaded the new model!!!!")
+        self.optimizer.load_state_dict(optimizer_state)
+        self.scheduler.load_state_dict(scheduler_state)
+        print(f"Loaded the new model succesfully!!!1 The training will continue from epoch {self.epoch}")
  
     def _save_checkpoint(self):
         ### This are the necessary steps to recover the model from the pickled file!!!
         model_weights = self.model.state_dict()
         model_config = self.model_config
         optimizer_state = self.optimizer.state_dict()
+        scheduler_state = self.scheduler.state_dict()
 
         checkpoint = {
                       "model_state_dict":model_weights,
                       "model_config":model_config,
                       "optimizer_state":optimizer_state,
+                      "scheduler_state": scheduler_state,
                       "epoch":self.epoch
                     }
         try:

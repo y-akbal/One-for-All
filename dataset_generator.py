@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.data.utils import DataLoader
+from torch.utils.data import DataLoader
 
 
 class ts_concatted:
@@ -11,7 +11,7 @@ class ts_concatted:
         lags should be the lags to be used,
         """
         assert (
-            len(lags) > 1
+            lags > 1
         ), "Come on dude this is a time series, you gotta be a bit serious !!!!"
         assert len(array) == sum(
             lengths
@@ -19,11 +19,12 @@ class ts_concatted:
         ## -- ##
         self.array = array
         self.lengths = np.cumsum(lengths)
-        self.lags = lags
+        self.lags = [lags+1 for _ in lengths]
         self.file_names = file_names
-        self.horizons = [len_ - lag + 1 for len_, lag in zip(lengths, lags)]
+        self.horizons = [len_ - lag + 1 for len_, lag in zip(lengths, self.lags)]
         self.cumhors = np.cumsum(self.horizons)
-        self.m = {i: j - i for i, j in enumerate(np.cumsum([0] + lags[:-1]))}
+        self.m = {i: j - i for i, j in enumerate(np.cumsum([0] + self.lags[:-1]))}
+        
         ## -- given that you provide txt files -- ##
         if file_names is not None:
             self.__read_csvfile_names__()
@@ -39,7 +40,7 @@ class ts_concatted:
 
         X = self.array[i + self.m[place_] : i + self.m[place_] + self.lags[place_]]
         N = len(X)
-        return X[:-1], X[4:N:4], place_
+        return X[:-1], X[4:N:4], place_, self.__file_names__[place_]
 
     def __len__(self) -> int:
         return len(self.array) - sum(self.lags) + len(self.lags)
@@ -56,15 +57,23 @@ class ts_concatted:
 
     def return_file_names(self, place:int) -> str:
         return self.__file_names__[place]
+"""
+data = np.memmap("array_test.dat", dtype = np.float32)
+lengths = np.memmap("lengthsarray_test.dat", dtype = np.uint32)
+file_names = "names_array_test.txt"
+int(np.cumsum(lengths)[256])
 
-     
-        
+q = ts_concatted(data, lengths, lags = 9, file_names=file_names)
+len(q)
+ts_concatted(data, lengths, lags = 9, file_names=file_names)[0]
+"""
+
 def return_dataset(**kwargs):
     memmap_data = np.memmap(kwargs["file"], dtype=np.float32)
     memmap_lengths = np.memmap(kwargs["length_file"], dtype=np.int32)
-    lags = kwargs["lags"]
-    lags = [lags for _ in memmap_lengths]
-    data_ = ts_concatted(**{"array":memmap_data, "lengths": memmap_lengths, "lags": lags})
+    file_names = kwargs["file_names"]
+    lags:int = kwargs["lags"]    
+    data_ = ts_concatted(**{"array":memmap_data, "lengths": memmap_lengths, "lags": lags, "file_names":file_names})
     return data_
 
 def data_loader(data, **kwargs):

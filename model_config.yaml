@@ -1,11 +1,9 @@
-
 model_config:
   number_ts: 264
   embedding_dim: 512
   n_blocks: 12
   pool_size: 4
   number_of_heads: 4
-
 
 
 compile_model: True
@@ -24,19 +22,25 @@ scheduler_config:
 
 data:
   train_path:
-   file: "array_train.dat"
-   length_file: "lengthsarray_train.dat"
-   lags: 513
+   file: "data/array_train.dat"
+   length_file: "data/lengthsarray_train.dat"
+   file_names: "data/names_array_train.txt"
+   lags: 512 # 512 +1 prediction, we will do
   val_path:
-   file: "array_test.dat"
-   length_file: "lengthsarray_test.dat"
-   lags: 513
+   file: "data/array_test.dat"
+   length_file: "data/lengthsarray_test.dat"
+   file_names: "data/names_array_test.txt"
+   lags: 512 # 512 +1 prediction, we will do
+
   
   train_data_details:
    batch_size: 256
    num_workers: 4
    shuffle: True
    pin_memory: True
+   persistent_workers: True
+   prefetch_factor: 2
+
   val_data_details:
    batch_size: 256
    num_workers: 4
