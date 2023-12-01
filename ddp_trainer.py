@@ -16,9 +16,9 @@ class Trainer:
         save_every: int,
         val_loss_logger = None,
         train_loss_logger = None,
-        compile = False,
-        use_wnb = False,
-        use_DDP = True,
+        compile:bool = False,
+        use_wnb:bool = False,
+        use_DDP:bool = True,
     ) -> None:
         self.gpu_id = gpu_id
         self.model_config = model.config
@@ -64,6 +64,9 @@ class Trainer:
             print(f"loss {loss.item()}, {i} batch, from gpu {self.gpu_id} ")
         ## Update the the gradients here!!! ## 
         self.scaler.scale(loss).backward()
+        ## Gradient scaling here!!!
+        ## -Do it boy!
+        ## End of gradient scaling!!!
         self.scaler.step(self.optimizer)
         self.scaler.update()
         self.scheduler.step()
