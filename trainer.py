@@ -17,7 +17,7 @@ class Trainer:
         max_epochs: int,
         snapshot_dir:str = "model",
         snapshot_name:str = "model.pt",
-        compile:bool = False,
+        compile_model:bool = False,
         use_wnb:bool = False,
         val_loss_logger = None,
         train_loss_logger = None,
@@ -26,7 +26,7 @@ class Trainer:
         self.model_config = model.config
         self.model = model.to(self.gpu_id)
         self.model = DDP(self.model, device_ids=[self.gpu_id])
-        if compile:
+        if compile_model:
             self.model = torch.compile(self.model)
         ##
         self.train_data = train_data
@@ -62,7 +62,7 @@ class Trainer:
         self.model.train() ## Model in train mode!!!
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
-            output = self.model(source, task = None)
+            output = self.model(source)
             loss = F.mse_loss(output, targets)
 
         if i % 100 == 0:

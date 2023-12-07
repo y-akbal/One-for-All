@@ -3,7 +3,7 @@ model_config:
   embedding_dim: 512
   ### add hear n_heads ### 
   n_blocks: 12
-  dropout: 0.5
+  #dropout: 0.5
   pool_size: 4
   number_of_heads: 4
 
@@ -41,7 +41,7 @@ data:
   train_data_details:
    batch_size: 256
    num_workers: 4
-   shuffle: True
+ #  shuffle: True
    pin_memory: True
    persistent_workers: True
    prefetch_factor: 2
@@ -49,7 +49,7 @@ data:
   val_data_details:
    batch_size: 256
    num_workers: 4
-   shuffle: False
+#   shuffle: False
    pin_memory: True
    drop_last: True
    

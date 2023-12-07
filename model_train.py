@@ -1,30 +1,45 @@
 import os
 import torch
 from torch import nn as nn
-from torch.nn import functional as F
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+from torch.distributed import init_process_group, destroy_process_group
+
 from dataset_generator import ts_concatted
 import numpy as np
 import time
 from main_model import Model
-## import hydra now
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from trainer import Trainer
-from dataset_generator import data_set, data_loader
+from dataset_generator import data_set
 
 
 ## Needed really?
 torch.set_float32_matmul_precision("high")
 ## 
 
+def ddp_setup():
+    init_process_group(backend="nccl")
+    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+
 def return_dataset(**kwargs):
     train_dataset, val_dataset = kwargs["train_path"], kwargs["val_path"]
+    train_data, validation_data = data_set(**train_dataset), data_set(**val_dataset)
+    
+    
+    train_sampler = DistributedSampler(train_data, shuffle = True)
+    validation_sampler = DistributedSampler(validation_data, shuffle = False)
+    
     train_data_kwargs, val_data_kwargs = kwargs["train_data_details"], kwargs["val_data_details"]
-    train_data = data_set(**train_dataset)
-    validation_data = data_set(**val_dataset)
-    train_dataloader = data_loader(train_data, **train_data_kwargs)
-    val_dataloader = data_loader(validation_data, **val_data_kwargs)
+
+    train_dataloader = DataLoader(dataset = train_data, 
+                                  sampler = train_sampler,
+                                  **train_data_kwargs)
+    val_dataloader = DataLoader(dataset = validation_data, 
+                                sampler = validation_sampler,
+                                **val_data_kwargs)
+
     return train_dataloader, val_dataloader
 
 
@@ -41,8 +56,9 @@ def return_training_stuff(seed = 0, **cfg):
 
 @hydra.main(version_base=None, config_path=".", config_name="model_config")
 def main(cfg : DictConfig):
+    ddp_setup()
 
-    train_dataloader, val_dataloader = return_dataset(cfg["data_config"])
+    train_dataloader, val_dataloader = return_dataset(**cfg["data"])
     trainer_config = cfg["trainer_config"]
     model, optimizer, scheduler = return_training_stuff(**cfg)
     
@@ -57,3 +73,4 @@ def main(cfg : DictConfig):
 if __name__ == '__main__':
     main()
     print("Şifa olsun!!!")
+    

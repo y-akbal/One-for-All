@@ -76,8 +76,7 @@ def data_set(**kwargs):
     data_ = ts_concatted(**{"array":memmap_data, "lengths": memmap_lengths, "lags": lags, "file_names":file_names})
     return data_
 
-def data_loader(data, **kwargs):
-    return DataLoader(data, **kwargs)
+
 
 
 

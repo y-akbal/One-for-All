@@ -1,0 +1,43 @@
+model_config:
+  number_ts: 264
+  embedding_dim: 512
+  n_blocks: 12
+  pool_size: 4
+  number_of_heads: 4
+trainer_config:
+  save_every: 1
+  max_epochs: 5
+  snapshot_name: small_model
+  snapshot_dir: /model
+  compile_model: true
+  use_wnb: false
+optimizer_config:
+  lr: 1.0e-06
+  weight_decay: 1.0e-05
+  momentum: 0.99
+scheduler_config:
+  T_max: 15
+data:
+  train_path:
+    file: data/array_train.dat
+    length_file: data/lengthsarray_train.dat
+    file_names: data/names_array_train.txt
+    lags: 512
+  val_path:
+    file: data/array_test.dat
+    length_file: data/lengthsarray_test.dat
+    file_names: data/names_array_test.txt
+    lags: 512
+  train_data_details:
+    batch_size: 256
+    num_workers: 4
+    shuffle: true
+    pin_memory: true
+    persistent_workers: true
+    prefetch_factor: 2
+  val_data_details:
+    batch_size: 256
+    num_workers: 4
+    shuffle: false
+    pin_memory: true
+    drop_last: true
