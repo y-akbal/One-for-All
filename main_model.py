@@ -16,6 +16,7 @@ class Model(nn.Module):
         number_ts=25, ###This is needed for embeddings, you can have more than you need for fine tuning
         num_of_clusters=None,  ### number of clusters of times series
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
+        conv_activation = F.gelu
     ):
         assert (
             lags / pool_size
@@ -41,7 +42,7 @@ class Model(nn.Module):
             d_out=self.embedding_dim,
             pool_size=pool_size,
             num_of_ts=number_ts,
-            conv_activation=F.gelu,
+            conv_activation=conv_activation,
             num_of_clusters=num_of_clusters,
             channel_shuffle_group=channel_shuffle_group,
         )

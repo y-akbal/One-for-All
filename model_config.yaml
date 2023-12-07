@@ -1,12 +1,26 @@
 model_config:
-  number_ts: 264
-  embedding_dim: 512
-  ### add hear n_heads ### 
+  lags: 512
+  embedding_dim: 768
   n_blocks: 12
-  #dropout: 0.5
   pool_size: 4
   number_of_heads: 4
-
+  number_ts: 264
+  number_of_clusters: None
+  ## As long as really want to experiment, do not touch any part of below ## s
+  # Upsampling_Details #
+  conv_activation: F.gelu
+  conv_FFN_activation: F.gelu
+  channel_shuffle_group: 2
+  conv_dense_bias: True
+  conv_FFN_bias: True
+  dropout_FFN: 0.2
+  dropout_linear: 0.2
+  # Attention_Block_Details #
+  FFN_dropout: 0.2
+  FFN_activation: F.gelu
+  FFN_expansion_size: 4
+  att_head_dropout: 0.2
+      
 trainer_config:
   save_every: 1
   max_epochs: 5
@@ -15,7 +29,6 @@ trainer_config:
   compile_model: True
   use_wnb: False
 
-  
   
 optimizer_config:
   lr: 0.000001
@@ -53,7 +66,4 @@ data:
    pin_memory: True
    drop_last: True
    
-   
-   
-  
 

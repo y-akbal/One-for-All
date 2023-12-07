@@ -116,7 +116,7 @@ class Upsampling(nn.Module):
         conv_activation=None,
         FFN_activation=nn.GELU("tanh"),
         num_of_ts=25,  ### number of time series to be used
-        channel_shuffle=True,  ### we add channel shuffle to trick
+        channel_shuffle=True,  ### we add channel shuffle trick
         num_of_clusters=None,  ### number of clusters of times series
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
         dropout_FFN=0.2,  ## droput of FFN layer,
