@@ -4,6 +4,7 @@ from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 import os
+from training_tools import loss_track, 
 
 class Trainer:
     def __init__(
@@ -18,7 +19,7 @@ class Trainer:
         snapshot_dir:str = "model",
         snapshot_name:str = "model.pt",
         compile_model:bool = False,
-        use_wnb:bool = False,
+        use_wnb:bool = True,
         val_loss_logger = None,
         train_loss_logger = None,
     ) -> None:
@@ -57,42 +58,34 @@ class Trainer:
         except Exception as e:
             print(f"There is a problem with loading the model weights and the problem is: {e}")
         
-    def _run_batch(self, source, targets, i):
+    def _run_batch(self, source, cls_, targets):
         ### All the things like low precision training will happen here!!!
         self.model.train() ## Model in train mode!!!
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
-            output = self.model(source)
+            output = self.model([source, cls_])
             loss = F.mse_loss(output, targets)
-
-        if i % 100 == 0:
-            print(f"loss {loss.item()}, {i} batch, from gpu {self.gpu_id} ")
-        ## Update the the gradients here!!! ## 
         self.scaler.scale(loss).backward()
-        ## Gradient scaling here!!!
-        ## -Do it boy!
-        ## End of gradient scaling!!!
         self.scaler.step(self.optimizer)
         self.scaler.update()
         self.scheduler.step()
-        ### We log the loss ### 
 
- 
+    
     def _run_epoch(self, epoch):
-        # b_sz = len(next(iter(self.train_data))[0])
         #if epoch % report_in_every == 0 and self.gpu_id == 0:
         #    print(f"[GPU{self.gpu_id}] Epoch {epoch}")
         self.train_data.sampler.set_epoch(epoch)
-
         for i, (source, targets, cls_, file_name) in enumerate(self.train_data):
-            source = source.to(self.gpu_id, non_blocking=True)
-            targets = targets.to(self.gpu_id, non_blocking=True)
-            self._run_batch(source, targets, i)
+            source, targets, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, targets, cls_])
+            self._run_batch(source, cls_, targets)
 
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):
+            ## Do training on one epoch --
+            if self.gpu_id == 0:
+                print(f"Epoch {self.epoch}")
             self._run_epoch(epoch)
-            ## Do dome saving ---
+            ## Some saving --
             if self.gpu_id == 0 and (epoch - 1) % self.save_every == 0:
                self._save_checkpoint(epoch)
             self.epoch += 1 #update epoch!!!             
@@ -104,18 +97,14 @@ class Trainer:
         self.model.eval()
         with torch.no_grad():  ## block tracking gradients
             for source, targets, cls_, file_name in self.val_data:
-                source = source.to(self.gpu_id)
-                targets = targets.to(self.gpu_id)
-                output = self.model(source)  
+                source, targets, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, targets, cls_])
+                output = self.model([source, cls_])  
                 loss = F.mse_loss(output, targets)
                 self.val_loss_logger.update(loss.item())
-
             self.val_loss_logger.all_reduce()
-            
             if self.gpu_id == 0:
                 print(self.val_loss_logger.get_avg_loss())
-                
-                self.val_loss_logger.reset()
+            self.val_loss_logger.reset()
                 
 
     ## Some tools ## 

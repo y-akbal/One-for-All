@@ -5,9 +5,9 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 
-from dataset_generator import ts_concatted
-import numpy as np
-import time
+#from dataset_generator import ts_concatted
+#import numpy as np
+#import time
 from main_model import Model
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -19,9 +19,17 @@ from dataset_generator import data_set
 torch.set_float32_matmul_precision("high")
 ## 
 
-def ddp_setup():
-    init_process_group(backend="nccl")
-    torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+class ddp_setup(object):
+    def __init__(self):
+        pass
+    def __enter__(self):
+        init_process_group(backend="nccl")
+        torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+        return 1
+    def __exit__(self, *args):
+        destroy_process_group()
+        return 0
+
 
 def return_dataset(**kwargs):
     train_dataset, val_dataset = kwargs["train_path"], kwargs["val_path"]
@@ -40,13 +48,13 @@ def return_dataset(**kwargs):
                                 sampler = validation_sampler,
                                 **val_data_kwargs)
 
-    return train_dataloader, val_dataloader
+    return train_dataloader, val_dataloader 
 
 
 def return_training_stuff(seed = 0, **cfg):
     keys = ["model_config", "optimizer_config","scheduler_config"]
     model_config, optimizer_config, scheduler_config = map(lambda x: cfg.__getitem__(x), keys)
-    torch.manual_seed(0)
+    torch.manual_seed(seed)
     model = Model(**model_config)
     optimizer = torch.optim.SGD(model.parameters(), **optimizer_config)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, **scheduler_config)
@@ -56,20 +64,22 @@ def return_training_stuff(seed = 0, **cfg):
 
 @hydra.main(version_base=None, config_path=".", config_name="model_config")
 def main(cfg : DictConfig):
-    ddp_setup()
 
-    train_dataloader, val_dataloader = return_dataset(**cfg["data"])
-    trainer_config = cfg["trainer_config"]
-    model, optimizer, scheduler = return_training_stuff(**cfg)
+    with ddp_setup():
+        train_dataloader, val_dataloader = return_dataset(**cfg["data"])
+        trainer_config = cfg["trainer_config"]
+        model, optimizer, scheduler = return_training_stuff(**cfg)
     
-    trainer = Trainer(model = model, 
+        trainer = Trainer(model = model, 
             train_data= train_dataloader,
             val_data = val_dataloader,
             optimizer = optimizer, 
             scheduler = scheduler,
             **trainer_config,                        
-    )
-    trainer.train()
+        )
+        trainer.train()
+
+
 if __name__ == '__main__':
     main()
     print("Şifa olsun!!!")

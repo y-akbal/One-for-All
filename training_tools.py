@@ -7,12 +7,10 @@ from torch.distributed import (
 )
 
 class loss_track:
-    def __init__(self, project="time_series_pred", file_name: str = "loss.log"):
+    def __init__(self, project="time_series_pred"):
         self.project = project
-        self.file_name = file_name
         self.temp_loss = 0
         self.counter = 1
-        self.loss = []
 
     def update(self, loss):
         self.temp_loss += loss
@@ -35,12 +33,9 @@ class loss_track:
             )
             all_reduce(loss_tensor, ReduceOp.SUM, async_op=True)
             self.temp_loss, self.counter = loss_tensor.tolist()
-            self.loss.append(self.temp_loss)
-        else:
-            self.loss.append(self.temp_loss)
+    
 
-
-class loss_track:
+class loss_track_old:
     """
     This dudes keeps track of the history of the loss in a rolling mean sense!!!
     """
