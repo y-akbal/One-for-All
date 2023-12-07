@@ -13,13 +13,17 @@ model_config:
   channel_shuffle_group: 2
   conv_dense_bias: True
   conv_FFN_bias: True
-  dropout_FFN: 0.2
-  dropout_linear: 0.2
+  conv_dropout_FFN: 0.2
+  conv_dropout_linear: 0.2
   # Attention_Block_Details #
-  FFN_dropout: 0.2
-  FFN_activation: F.gelu
-  FFN_expansion_size: 4
-  att_head_dropout: 0.2
+  attenttion_FFN_dropout: 0.2
+  attenttion_FFN_activation: F.gelu
+  attenttion_FFN_bias: True
+  attenttion_FFN_expansion_size: 4
+  ## check the attention dropout from pytorchs attention
+  ## This dudes should bn
+  
+
       
 trainer_config:
   save_every: 1
@@ -30,13 +34,20 @@ trainer_config:
   use_wnb: False
 
   
-optimizer_config:
-  lr: 0.000001
-  weight_decay: 0.00001
-  momentum: 0.99
+optimizer_scheduler_config:
+  optimizer_config:
+    lr: 0.0001875  #0.0005*batch_size*GPU/512
+    weight_decay: 0.05
+    momentum: 0.9
 
-scheduler_config:
-  T_max: 15
+  scheduler_config:
+    cosine:
+      T_0: 300
+      eta_min: 0.0000088
+    linear_scheduler:
+      total_iters: 5
+      start_factor: 0.0002
+  ###Scheduler and optimizer config should be given to the cfg file.
 
 data:
   train_path:

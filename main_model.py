@@ -15,8 +15,17 @@ class Model(nn.Module):
         number_of_heads=8,
         number_ts=25, ###This is needed for embeddings, you can have more than you need for fine tuning
         num_of_clusters=None,  ### number of clusters of times series
+        conv_activation = F.gelu,
+        conv_FFN_activation = F.gelu,
+        conv_dropout_FFN = 0.2,
+        conv_dropout_linear = 0.2,
+        conv_FFN_bias = True,
+        conv_dense_bias = True,
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
-        conv_activation = F.gelu
+        attenttion_FFN_dropout = 0.2,
+        attenttion_FFN_activation = F.gelu,
+        attenttion_FFN_expansion_size = 4,
+        attenttion_FFN_bias = True,
     ):
         assert (
             lags / pool_size
@@ -61,6 +70,17 @@ class Model(nn.Module):
             "number_ts": number_ts,
             "num_of_clusters": num_of_clusters,
             "channel_shuffle_group": channel_shuffle_group,
+            "conv_activation": conv_activation,
+            "conv_FFN_activation": conv_FFN_activation,
+            "channel_shuffle_group": channel_shuffle_group,
+            "conv_dense_bias": conv_dense_bias,
+            "conv_FFN_bias": conv_FFN_bias,
+            "conv_dropout_FFN": conv_dropout_FFN,
+            "conv_dropout_linear": conv_dropout_linear,
+            "attenttion_FFN_dropout": attenttion_FFN_dropout,
+            "attenttion_FFN_activation": attenttion_FFN_activation,
+            "attenttion_FFN_bias": attenttion_FFN_bias,
+            "attenttion_FFN_expansion_size": attenttion_FFN_expansion_size,
         }
 
     def forward(self, x):

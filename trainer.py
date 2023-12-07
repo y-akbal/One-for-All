@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 import os
-from training_tools import loss_track, 
+from training_tools import loss_track
 
 class Trainer:
     def __init__(

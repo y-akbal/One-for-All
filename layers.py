@@ -162,9 +162,7 @@ class Upsampling(nn.Module):
                 requires_grad=False,
             ),
         )
-
-        ## positional embedding of pools
-
+        ## positional embedding of pools ##
         self.pe_embedding = nn.Embedding(self.num_pools, d_out)
         ## positional embeddings of time series
         self.ts_embedding = nn.Embedding(self.num_of_ts, d_out)
@@ -273,7 +271,7 @@ class multi_head_attention(nn.Module):
             t,
         )
         t = t.view(B, self.embedding_dim, self.W)
-
+        ## Check the dropout of the linear dude
         return self.dense(t)
 
 
