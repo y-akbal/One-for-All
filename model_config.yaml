@@ -1,6 +1,7 @@
 model_config:
   number_ts: 264
   embedding_dim: 512
+  ### add hear n_heads ### 
   n_blocks: 12
   dropout: 0.5
   pool_size: 4
