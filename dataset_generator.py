@@ -68,7 +68,7 @@ len(q)
 ts_concatted(data, lengths, lags = 9, file_names=file_names)[0]
 """
 
-def return_dataset(**kwargs):
+def data_set(**kwargs):
     memmap_data = np.memmap(kwargs["file"], dtype=np.float32)
     memmap_lengths = np.memmap(kwargs["length_file"], dtype=np.int32)
     file_names = kwargs["file_names"]

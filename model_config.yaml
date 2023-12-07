@@ -2,16 +2,17 @@ model_config:
   number_ts: 264
   embedding_dim: 512
   n_blocks: 12
-#  dropout: 0.2
+  dropout: 0.5
   pool_size: 4
   number_of_heads: 4
 
 trainer_config:
-  compile_model: True
-  snapshot_path: "/model"
-  snapshot_name: "small_model"
   save_every: 1
   max_epochs: 5
+  snapshot_name: "small_model"
+  snapshot_dir: "/model"
+  compile_model: True
+  use_wnb: False
 
   
   
@@ -28,12 +29,12 @@ data:
    file: "data/array_train.dat"
    length_file: "data/lengthsarray_train.dat"
    file_names: "data/names_array_train.txt"
-   lags: 512 # 512 +1 prediction, we will do
+   lags: 512 # 512 -> 1 prediction, we will do
   val_path:
    file: "data/array_test.dat"
    length_file: "data/lengthsarray_test.dat"
    file_names: "data/names_array_test.txt"
-   lags: 512 # 512 +1 prediction, we will do
+   lags: 512 # 512 -> 1 prediction, we will do
 
   
   train_data_details:

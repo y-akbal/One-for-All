@@ -85,6 +85,7 @@ class Trainer:
                 print(f"{i}th batch passed, it takes {q} to pass a batch!!!, the loss is {temp_loss}, lr is {self.scheduler.get_last_lr()}")
 
     def _save_snapshot(self, epoch):
+        ## This is to be used on a single gpu!!!
         snapshot = {
                 "state_dict": self.model.module.state_dict(),
                 "optimization_state": self.optimizer.state_dict(),
