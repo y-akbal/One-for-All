@@ -48,7 +48,6 @@ class Model(nn.Module):
 
         ### This dude is the final linear
         ### The same along all dimensions, we can replace it by an MLP
-        ## 
         self.Linear = Linear(self.embedding_dim, 1, bias = True)
         ###
         ### here is the config dict to be used

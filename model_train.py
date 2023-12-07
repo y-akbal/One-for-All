@@ -22,6 +22,8 @@ def return_optimizer(**kwargs):
     pass
 def return_scheduler(**kwargs):
     pass
+def return_dataset(**kwargs):
+    pass
 
 
 
