@@ -162,12 +162,13 @@ class Model(nn.Module):
     @torch.no_grad()
     def generate(self, **kwargs):
         ## place holder for single gpu long-term forcasting!!!
+        ## padding kind of stuff will be added here!!!
         pass 
 
-
+"""
 
 torch.manual_seed(2)
 model = Model(n_blocks=12, embedding_dim=768, pool_size=4, conv_FFN_expansion_size=4, channel_shuffle=True, channel_shuffle_group= 256)
 model.eval()
 model([torch.randn(10, 1, 512), torch.tensor([0])])[0].std()
-
+"""
