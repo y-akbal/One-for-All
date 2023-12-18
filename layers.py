@@ -9,7 +9,7 @@ import time
 #### H refers to population of lags via layers
 #### On time permitting https://pytorch.org/docs/stable/nn.init.html
 #### will look at the above initializations as He initialization may sound better, for the first layers
-#### If possible do torch.compile(model), things go damn fast!!! furious....
+#### If possible do torch.compile(model), things go damn fast!!! and furious....
 
 
 class Linear(
@@ -19,7 +19,12 @@ class Linear(
     ### Motivated by Pytorch original Linear Layer
     ### BTW if we had the information of static shapes, then we would change the order of multiplication
     ## To further
-    def __init__(self, d_in, d_out, bias=False, device=None, dtype=None, dropout=0.1):
+    def __init__(self, d_in, 
+                 d_out, 
+                 bias=False, 
+                 device=None, 
+                 dtype=None, 
+                 dropout=0.1):
         kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.M = Parameter(
@@ -51,14 +56,19 @@ class Linear(
 
 class FFN(nn.Module):
     def __init__(
-        self, d_in, expansion_size=2, dropout=0.2, activation=nn.ReLU(), bias=True
+        self, 
+        d_in, 
+        expansion_size=2, 
+        dropout=0.2, 
+        activation=nn.ReLU(), 
+        bias=True
     ) -> None:
         assert d_in * expansion_size > 1, "Do not squeeze too much buddy!!!!"
         d_temp_out = int(d_in * expansion_size)
         ### This dude is FFN part as given in the all you need paper, we use nn.ReLU, as we may.
         super().__init__()
         self.linear = nn.Sequential(
-            Linear(d_in=d_in, d_out=d_temp_out, dropout=0, bias=bias),
+            Linear(d_in=d_in, d_out=d_temp_out, dropout=dropout, bias=bias),
             activation,
             Linear(d_in=d_temp_out, d_out=d_in, dropout=dropout, bias=bias),
         )
@@ -68,22 +78,21 @@ class FFN(nn.Module):
 
 
 class layernorm(nn.Module):
-    # We normalize the local copies not along time dimension
-    ## standard layer norm guy, horoko!!!
+    ## We normalize the local copies not along time dimension
+    ## standard layer norm guy.
     ## We are closely approaching real Pytorch's implementation
-    ## This layer seems to beat Pytorch's default layer norm with transpose
-    ## If the layer is compiled.
     def __init__(self, dim, eps=1e-5, **kwargs):
         super().__init__()
         self.eps = eps
-        self.gamma = nn.Parameter(torch.ones((dim), requires_grad=True, **kwargs))
-        self.beta = nn.Parameter(torch.zeros((dim), requires_grad=True, **kwargs))
+        self.gamma = nn.Parameter(torch.ones((dim, 1), requires_grad=True, **kwargs))
+        self.beta = nn.Parameter(torch.zeros((dim, 1), requires_grad=True, **kwargs))
 
     def forward(self, x):
         mean = x.mean(1, keepdims=True)
         var = x.var(1, keepdims=True)
         unit = (x - mean) / torch.sqrt(self.eps + var)
         return self.gamma * unit + self.beta  ### B*H*W -> B*H*W
+
 
 
 def channel_shuffleF(x, groups):
@@ -111,16 +120,17 @@ class Upsampling(nn.Module):
         lags: int = 512,  ### input dimension (width)
         d_out=128,  ## output dimension (height)
         pool_size=4,  ## pool_sizes
-        conv_bias=True,
-        dense_bias=True,
+        conv_bias=True, ## Convolutional layer bias
+        dense_bias=True, ## FFN bias
         conv_activation=None,
         FFN_activation=nn.GELU("tanh"),
         num_of_ts=25,  ### number of time series to be used
-        channel_shuffle=True,  ### we add channel shuffle trick
         num_of_clusters=None,  ### number of clusters of times series
+        channel_shuffle=True,  ### we add channel shuffle trick
         channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
         dropout_FFN=0.2,  ## droput of FFN layer,
         dropout_linear=0.2,  ##dropout of linear layer,
+        FFN_expansion_size = 2,
         **kwargs,
     ):
         super().__init__(**kwargs)
@@ -146,10 +156,14 @@ class Upsampling(nn.Module):
             conv_activation if conv_activation != None else torch.nn.Identity()
         )
         ## Normalization layer
-        self.normalization = layernorm(self.num_pools)
+        self.normalization = layernorm(d_out)
         ## FFN part
         self.FFN = FFN(
-            d_in=d_out, bias=dense_bias, dropout=dropout_FFN, activation=FFN_activation
+            d_in=d_out, 
+            bias=dense_bias, 
+            dropout=dropout_FFN, 
+            activation=FFN_activation,
+            expansion_size= FFN_expansion_size,
         )
         ## Linear Layer
         self.linear = Linear(d_out, d_out, bias=True, dropout=dropout_linear)
@@ -214,17 +228,27 @@ class Upsampling(nn.Module):
                 )  ### cluster embeddings to help the model
             )
         else:
-            dense_applied += convolved_ts + self.ts_embedding(te).transpose(-1, -2)
+            dense_applied += normalized + self.ts_embedding(te).transpose(-1, -2)
         ## Final linear layer two mix the channels
         final_linear = self.linear(dense_applied)  # BxHxW-> BxHxW
         return final_linear
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
 
 
-class multi_head_attention(nn.Module):
-    """This dude is a bit faster than the original"""
+"""
+some debug
+Upsampling(d_out=768)([torch.randn(1, 1, 512), torch.tensor([2])]).std(-2)
+"""
 
-    def __init__(self, embedding_dim=128, heads=4, lag=512, dropout=0.2, causal=True):
+class multi_head_attention(nn.Module):
+    """This dude is a bit faster than the original provided that we do not use flash attention!!!"""
+
+    def __init__(self, embedding_dim=128, 
+                 heads=4, 
+                 lag=512, 
+                 dropout=0.2, 
+                 att_head_dropout = 0.1,
+                 causal=True):
         super().__init__()
 
         assert (
@@ -234,7 +258,7 @@ class multi_head_attention(nn.Module):
         )
 
         self.embedding_dim = embedding_dim
-        self.linear = Linear(embedding_dim, 3 * embedding_dim)
+        self.linear = Linear(embedding_dim, 3 * embedding_dim, dropout=att_head_dropout)
         self.heads = heads
         self.causal = causal
         self.W = lag  ### Here W stands for width (or lags)
@@ -275,13 +299,14 @@ class multi_head_attention(nn.Module):
         return self.dense(t)
 
 
-class block(nn.Module):
+class attention_block(nn.Module):
     def __init__(
         self,
         d_in=128,  ### embedding dimension
         width=128,  ### width of time series to be used
         n_heads=4,
         dropout_FFN=0.5,  ## dropout of FFN
+        bias_FFN = True,
         att_head_dropout=0.2,  ## dropout of attention heads
         causal=True,
         expansion_size=2,  ### expansion size of FFN
@@ -302,18 +327,15 @@ class block(nn.Module):
             expansion_size=expansion_size,
             dropout=dropout_FFN,
             activation=activation,
+            bias=bias_FFN
         )
         ### Normalization layers
-        self.ln1 = layernorm(width)
-        self.ln2 = layernorm(width)
+        self.ln1 = layernorm(d_in)
+        self.ln2 = layernorm(d_in)
 
     def forward(self, x):  # B*H*W -> B*H*W
-        y = self.ln1(x)
-        y = self.att_head(y)
-        y += x  ## Residual connection
-        x = self.ln2(y)
-        x = self.FFN(x)
-        x += y  ## Residual Connection
+        x = x + self.att_head(self.ln1(x))
+        x = x + self.FFN(self.ln2(x))
         return x
 
 

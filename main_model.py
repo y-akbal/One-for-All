@@ -1,7 +1,7 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-from layers import block, Upsampling, Linear
+from layers import attention_block, Upsampling, Linear, layernorm
 import pickle
 
 
@@ -12,20 +12,22 @@ class Model(nn.Module):
         embedding_dim: int = 512,
         n_blocks: int = 25,
         pool_size: int = 4,
-        number_of_heads=8,
-        number_ts=25, ###This is needed for embeddings, you can have more than you need for fine tuning
+        number_of_heads=4,
+        number_ts=25, ###This is needed for embeddings, you can have more than you need for prompt fine tuning 
         num_of_clusters=None,  ### number of clusters of times series
-        conv_activation = F.gelu,
-        conv_FFN_activation = F.gelu,
+        conv_activation = nn.GELU(),
+        conv_FFN_activation = nn.GELU(),
+        channel_shuffle = True,
+        channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
         conv_dropout_FFN = 0.2,
         conv_dropout_linear = 0.2,
         conv_FFN_bias = True,
-        conv_dense_bias = True,
-        channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
-        attenttion_FFN_dropout = 0.2,
-        attenttion_FFN_activation = F.gelu,
-        attenttion_FFN_expansion_size = 4,
-        attenttion_FFN_bias = True,
+        conv_FFN_expansion_size = 4,
+        conv_bias = True,
+        attention_FFN_dropout = 0.2,
+        attention_FFN_activation = nn.GELU(),
+        attention_FFN_bias = True,
+        attention_FFN_expansion_size = 4,
     ):
         assert (
             lags / pool_size
@@ -36,29 +38,42 @@ class Model(nn.Module):
         ###
         self.cluster_used = True if num_of_clusters is not None else False
         ###
-        self.blocks = nn.Sequential(
-            *(
-                block(
-                    embedding_dim,
-                    width=self.width,
-                    n_heads=number_of_heads,
-                )
-                for _ in range(n_blocks)
-            )
-        )
+
         self.up_sampling = Upsampling(
             lags=lags,
             d_out=self.embedding_dim,
             pool_size=pool_size,
-            num_of_ts=number_ts,
+            conv_bias= conv_bias, 
+            dense_bias= conv_FFN_bias,
             conv_activation=conv_activation,
+            FFN_activation=  conv_FFN_activation,
+            num_of_ts=number_ts,
             num_of_clusters=num_of_clusters,
+            channel_shuffle = channel_shuffle,
             channel_shuffle_group=channel_shuffle_group,
+            FFN_expansion_size= conv_FFN_expansion_size,           
+            dropout_FFN = conv_dropout_FFN,
+            dropout_linear = conv_dropout_linear,
         )
-
+        self.blocks = nn.Sequential(
+            *(
+                attention_block(
+                    d_in = embedding_dim,
+                    width=self.width,
+                    n_heads=number_of_heads,
+                    dropout_FFN=attention_FFN_dropout,
+                    activation=attention_FFN_activation,
+                    expansion_size= attention_FFN_expansion_size,
+                    bias_FFN=attention_FFN_bias
+                )
+                for _ in range(n_blocks)
+            )
+        )
         ### This dude is the final linear
         ### The same along all dimensions, we can replace it by an MLP
-        self.Linear = Linear(self.embedding_dim, 1, bias = True)
+        self.Linear = nn.Sequential(*[layernorm(self.embedding_dim),
+            Linear(self.embedding_dim, 1, bias = True)
+        ])
         ###
         ### here is the config dict to be used
         self.config = {
@@ -69,18 +84,19 @@ class Model(nn.Module):
             "number_of_heads": number_of_heads,
             "number_ts": number_ts,
             "num_of_clusters": num_of_clusters,
-            "channel_shuffle_group": channel_shuffle_group,
             "conv_activation": conv_activation,
             "conv_FFN_activation": conv_FFN_activation,
+            "channel_shuffle": channel_shuffle,
             "channel_shuffle_group": channel_shuffle_group,
-            "conv_dense_bias": conv_dense_bias,
-            "conv_FFN_bias": conv_FFN_bias,
             "conv_dropout_FFN": conv_dropout_FFN,
             "conv_dropout_linear": conv_dropout_linear,
-            "attenttion_FFN_dropout": attenttion_FFN_dropout,
-            "attenttion_FFN_activation": attenttion_FFN_activation,
-            "attenttion_FFN_bias": attenttion_FFN_bias,
-            "attenttion_FFN_expansion_size": attenttion_FFN_expansion_size,
+            "conv_FFN_bias": conv_FFN_bias,
+            "conv_FFN_expansion_size": conv_FFN_expansion_size,            
+            "conv_bias": conv_bias,
+            "attention_FFN_dropout": attention_FFN_dropout,
+            "attention_FFN_activation": attention_FFN_activation,
+            "attention_FFN_bias": attention_FFN_bias,
+            "attention_FFN_expansion_size": attention_FFN_expansion_size,
         }
 
     def forward(self, x):
@@ -90,11 +106,11 @@ class Model(nn.Module):
             x = self.up_sampling((x, tse_embedding, cluster_embedding))
         else:
             x, tse_embedding = x[0], x[1]
-            x = self.up_sampling((x, tse_embedding))
+            y = self.up_sampling((x, tse_embedding))
         ## Concatted transformer blocks
         ###
-        x = self.blocks(x)
-        return self.Linear(x)
+        x = self.blocks(y)
+        return self.Linear(x), x, y
 
     @classmethod
     def from_config_file(cls, config_file):
@@ -130,7 +146,7 @@ class Model(nn.Module):
         else:
             return cls(**data_class.__dict__)
 
-    def save_model(self, file_name):
+    def save_model(self, file_name = None):
         fn = "Model" if file_name == None else file_name
         model = {}
         model["state_dict"] = self.state_dict()
@@ -143,17 +159,15 @@ class Model(nn.Module):
         except Exception as exp:
             print(f"Something went wrong with {exp}!!!!!")
 
+    @torch.no_grad()
+    def generate(self, **kwargs):
+        ## place holder for single gpu long-term forcasting!!!
+        pass 
 
-"""
-model = Model.from_pretrained("model.pt")
-model = Model.from_config_file("write_it.cfg")
 
-### --#-- ### 
-### --#-- ###
-### --#-- ###
 
-torch.manual_seed(0)
-model([torch.randn(1, 1, 512), torch.tensor([0])])
+torch.manual_seed(2)
+model = Model(n_blocks=12, embedding_dim=768, pool_size=4, conv_FFN_expansion_size=4, channel_shuffle=True, channel_shuffle_group= 256)
+model.eval()
+model([torch.randn(10, 1, 512), torch.tensor([0])])[0].std()
 
-model.save_model("10epoch.r")
-"""

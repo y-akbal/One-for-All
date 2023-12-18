@@ -72,7 +72,7 @@ def main(cfg : DictConfig):
     
         trainer = Trainer(model = model, 
             train_data= train_dataloader,
-            val_data = val_dataloader,
+            val_data = val_dataloader, 
             optimizer = optimizer, 
             scheduler = scheduler,
             **trainer_config,                        

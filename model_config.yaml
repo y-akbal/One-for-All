@@ -6,22 +6,23 @@ model_config:
   number_of_heads: 4
   number_ts: 264
   number_of_clusters: None
-  ## As long as really want to experiment, do not touch any part of below ## s
-  # Upsampling_Details #
+  ## As long as really want to experiment, do not touch any part of below ##
+  ## Upsampling_Details ##
   conv_activation: F.gelu
   conv_FFN_activation: F.gelu
+  channel_shuffle: True
   channel_shuffle_group: 2
-  conv_dense_bias: True
-  conv_FFN_bias: True
   conv_dropout_FFN: 0.2
   conv_dropout_linear: 0.2
+  conv_FFN_bias: True
+  conv_FFN_expansion_size: 2
+  conv_bias: True
   # Attention_Block_Details #
   attenttion_FFN_dropout: 0.2
   attenttion_FFN_activation: F.gelu
   attenttion_FFN_bias: True
   attenttion_FFN_expansion_size: 4
   ## check the attention dropout from pytorchs attention
-  ## This dudes should bn
   
 
       
