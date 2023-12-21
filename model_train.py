@@ -1,4 +1,5 @@
 import os
+os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
 import torch
 from torch import nn as nn
 from torch.utils.data import DataLoader
@@ -57,7 +58,7 @@ def return_training_stuff(seed = 0, **cfg):
     torch.manual_seed(seed)
     model = Model(**model_config)
     optimizer = torch.optim.SGD(model.parameters(), **optimizer_config)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, **scheduler_config)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **scheduler_config)
     return model, optimizer, scheduler
 
 
@@ -67,9 +68,12 @@ def main(cfg : DictConfig):
 
     with ddp_setup():
         train_dataloader, val_dataloader = return_dataset(**cfg["data"])
+
+        print(f"There are a total number of {len(train_dataloader)} number of training batches, and {len(val_dataloader)} validation batches!!!")
+
         trainer_config = cfg["trainer_config"]
         model, optimizer, scheduler = return_training_stuff(**cfg)
-    
+        
         trainer = Trainer(model = model, 
             train_data= train_dataloader,
             val_data = val_dataloader, 

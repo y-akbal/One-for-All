@@ -27,32 +27,29 @@ class Linear(
                  dropout=0.1):
         kwargs = {"device": device, "dtype": dtype}
         super().__init__()
-        self.M = Parameter(
-            torch.randn(d_in, d_out, requires_grad=True, **kwargs)
-            * ((d_in + d_out) / 2) ** (-0.5)
+        self.M = nn.Parameter(
+            torch.randn(size = (d_in, d_out), **kwargs)/((d_in+d_out)/2)*0.5
         )  # Kaiming init
+        
         self.bias = bias
         if self.bias:
-            self.b = Parameter(
+            self.b = nn.Parameter(
                 # torch.zeros(d_out, requires_grad=True, dtype=torch.float32)
-                torch.randn(d_out, requires_grad=True, **kwargs)
-                / d_out**2
+                torch.empty(d_out, requires_grad=True, **kwargs)
             )
+            torch.nn.init.zeros_(self.b)
+        
         ## Let's do some functional stuff
         self.bias_f = lambda x: x + self.b if self.bias else x
-        if dropout > 0:
-            self.dropout = nn.Dropout(dropout, inplace=False)
-        else:
-            self.dropout = lambda x: x
-
+        self.dropout = nn.Dropout(dropout, inplace=False) if dropout > 0 else lambda x: x
+        
     def forward(self, x):  # Bxd_inxW -> Bxd_outxW
         ### changed the order and saved some time
         ### because CUDA likes it!!!
-        x = self.dropout(x)
         res = x.transpose(-1, -2) @ self.M
         res = self.bias_f(res)
-        return res.transpose(-1, -2)
-
+        return self.dropout(res.transpose(-1, -2))
+    
 
 class FFN(nn.Module):
     def __init__(
@@ -68,7 +65,7 @@ class FFN(nn.Module):
         ### This dude is FFN part as given in the all you need paper, we use nn.ReLU, as we may.
         super().__init__()
         self.linear = nn.Sequential(
-            Linear(d_in=d_in, d_out=d_temp_out, dropout=dropout, bias=bias),
+            Linear(d_in=d_in, d_out=d_temp_out, dropout=0.0, bias=bias),
             activation,
             Linear(d_in=d_temp_out, d_out=d_in, dropout=dropout, bias=bias),
         )
@@ -198,20 +195,19 @@ class Upsampling(nn.Module):
         else:
             ts, te = x  ## split
 
-        assert ts.shape[-1] == self.lags, f"{self.lags} is not equal to {ts.shape[-1]}"
-
         # ts: Bx1xW (W here is used for Lags) the raw time series,
         # pe: (BxHxW) positional embeddings of time series,
-        # te: (Embedding (geospatial) of the time series depending).
-        # tc: Clustered time series, depending on geospatial data
+        # te: Enumeration for Embedding (geospatial) of the time series depending.
+        # tc: Clustered time series enumeration for depending on geospatial data
 
         convolved_ts = self.Conv(ts)  # Bx1xW -> BxHxW/pool_size
+        
         ## From now on we convey W = W/pool_size
         # BxHxW += #BxHxW (WxH -> HxW)   # Position embedding of pools
-        convolved_ts += self.pe_embedding(self.num_enum).transpose(-1, -2)
+        convolved_ts += self.pe_embedding(self.num_enum[:convolved_ts.shape[-1]]).transpose(-1, -2)
         activated = self.conv_activation(convolved_ts)  # BxHxW -> BxHxW
         normalized = self.normalization(activated)  # BxHxW -> BxHxW
-
+        
         ###
         # if self.channel_shuffle:
         normalized = self.shuffle(normalized)
@@ -230,23 +226,27 @@ class Upsampling(nn.Module):
         else:
             dense_applied += normalized + self.ts_embedding(te).transpose(-1, -2)
         ## Final linear layer two mix the channels
-        final_linear = self.linear(dense_applied)  # BxHxW-> BxHxW
-        return final_linear
+        return self.linear(dense_applied)  # BxHxW-> BxHxW
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
 
 
+
+
+
+
 """
-some debug
-Upsampling(d_out=768)([torch.randn(1, 1, 512), torch.tensor([2])]).std(-2)
+Upsampling(d_out=768)([torch.randn(2, 1, 512), torch.tensor([1,2]).unsqueeze(-1)])
+
+torch.tensor([[1],[2]]).shape
 """
 
 class multi_head_attention(nn.Module):
     """This dude is a bit faster than the original provided that we do not use flash attention!!!"""
 
-    def __init__(self, embedding_dim=128, 
+    def __init__(self, embedding_dim=768, 
                  heads=4, 
                  lag=512, 
-                 dropout=0.2, 
+                 projection_dropout=0.2, 
                  att_head_dropout = 0.1,
                  causal=True):
         super().__init__()
@@ -258,13 +258,13 @@ class multi_head_attention(nn.Module):
         )
 
         self.embedding_dim = embedding_dim
-        self.linear = Linear(embedding_dim, 3 * embedding_dim, dropout=att_head_dropout)
+        self.linear = Linear(embedding_dim, embedding_dim, dropout = 0.0, bias = False)
         self.heads = heads
         self.causal = causal
-        self.W = lag  ### Here W stands for width (or lags)
-        self.Dropout = nn.Dropout(p=dropout)
+        self.W = lag  ### Here W stands for width (or lags), redundant will not be needed really!!!!
+        self.att_dropout = nn.Dropout(p=att_head_dropout)
         ## output linear
-        self.dense = Linear(embedding_dim, embedding_dim, bias=True)
+        self.projection = Linear(embedding_dim, embedding_dim, bias=True, dropout = projection_dropout)
 
         ### blocking attenting to Future ###
         if self.causal:
@@ -277,26 +277,27 @@ class multi_head_attention(nn.Module):
             )
 
     def forward(self, x):  # BxHxL -> BxHxL
-        B, _, _ = x.shape
-        ## Apply Dropout ##
-        KQV = self.linear(x)
-        KQV = x.view(B, self.heads, int(self.embedding_dim / self.heads), self.W)
-
+        B, embedding_dim, L = x.shape
+        
+        KQV = self.linear(x) #BxHxL -> Bx3*HxL
+        KQV = KQV.view(B, self.heads, int(self.embedding_dim / self.heads), L) #BxH*L -> Bx(num_heads)x(H/num_heads)*L
         attention_scores = KQV.transpose(-2, -1) @ KQV
-
+        ## We need to change the causal factor to something better, to avoid working with static shapes!!!
         if self.causal:
             attention_scores = attention_scores.masked_fill(
                 self.causal_factor, -torch.inf
             )
+        
         softmaxed_att = nn.Softmax(-2)(attention_scores * self.embedding_dim ** (-0.5))
-
-        t = KQV @ softmaxed_att
-        t = self.Dropout(
-            t,
+        
+        att = self.att_dropout(
+            softmaxed_att,
         )
+        t = KQV @ att
+
         t = t.view(B, self.embedding_dim, self.W)
-        ## Check the dropout of the linear dude
-        return self.dense(t)
+        ## Check the dropout of the output is applied here automatically!!!
+        return self.projection(t)
 
 
 class attention_block(nn.Module):
@@ -308,6 +309,7 @@ class attention_block(nn.Module):
         dropout_FFN=0.5,  ## dropout of FFN
         bias_FFN = True,
         att_head_dropout=0.2,  ## dropout of attention heads
+        projection_dropout = 0.2,
         causal=True,
         expansion_size=2,  ### expansion size of FFN
         activation=nn.GELU("tanh"),  ### this is used
@@ -318,7 +320,8 @@ class attention_block(nn.Module):
             embedding_dim=d_in,
             lag=width,
             heads=n_heads,
-            dropout=att_head_dropout,
+            att_head_dropout = att_head_dropout,
+            projection_dropout = projection_dropout,
             causal=causal,
         )
         ### FFN layer

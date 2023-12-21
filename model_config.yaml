@@ -3,13 +3,13 @@ model_config:
   embedding_dim: 768
   n_blocks: 12
   pool_size: 4
-  number_of_heads: 4
+  number_of_heads: 8
   number_ts: 264
-  number_of_clusters: None
+  #number_of_clusters: None
   ## As long as really want to experiment, do not touch any part of below ##
   ## Upsampling_Details ##
-  conv_activation: F.gelu
-  conv_FFN_activation: F.gelu
+  #conv_activation: F.gelu
+  #conv_FFN_activation: F.gelu
   channel_shuffle: True
   channel_shuffle_group: 2
   conv_dropout_FFN: 0.2
@@ -18,37 +18,38 @@ model_config:
   conv_FFN_expansion_size: 2
   conv_bias: True
   # Attention_Block_Details #
-  attenttion_FFN_dropout: 0.2
-  attenttion_FFN_activation: F.gelu
-  attenttion_FFN_bias: True
-  attenttion_FFN_expansion_size: 4
-  ## check the attention dropout from pytorchs attention
+  attention_FFN_dropout: 0.2
+  #attention_FFN_activation: F.gelu
+  attention_FFN_bias: True
+  attention_FFN_expansion_size: 4
   
-
+  
+### NOTES: 
+###1) DO A FINAL CHECK ON ATTENTION DROPOUT STUFF
+###2) ATTENTION MASK IS IMPORTANT THEREFORE SHOULD HAVE DYNAMIC SHAPE
+###3) CHECK LOSS LOGGER AND VAL_LOSS LOGGER AND WANDB STUFF IS IMPORTANT!!!
+###4) CHECK THE AVERAGE AND STD OF OUTPUT AT 0TH INITIALIZATION
+###5) DO SYSTEMATIC ANALYSIS ON R2 VALUES SOMEWAY
+###6) SOME PROFILING WOULD BE VERY GOOD!!!
       
 trainer_config:
   save_every: 1
   max_epochs: 5
   snapshot_name: "small_model"
   snapshot_dir: "/model"
-  compile_model: True
+  compile_model: False
   use_wnb: False
 
   
-optimizer_scheduler_config:
-  optimizer_config:
-    lr: 0.0001875  #0.0005*batch_size*GPU/512
-    weight_decay: 0.05
-    momentum: 0.9
+optimizer_config:
+  lr: 0.0001875  #0.0005*batch_size*GPU/512
+  weight_decay: 0.05
+  momentum: 0.9
 
-  scheduler_config:
-    cosine:
-      T_0: 300
-      eta_min: 0.0000088
-    linear_scheduler:
-      total_iters: 5
-      start_factor: 0.0002
-  ###Scheduler and optimizer config should be given to the cfg file.
+scheduler_config:
+  T_0: 300
+  eta_min: 0.0000088
+
 
 data:
   train_path:
@@ -64,7 +65,7 @@ data:
 
   
   train_data_details:
-   batch_size: 256
+   batch_size: 96
    num_workers: 4
  #  shuffle: True
    pin_memory: True

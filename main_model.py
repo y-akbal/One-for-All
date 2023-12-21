@@ -14,7 +14,7 @@ class Model(nn.Module):
         pool_size: int = 4,
         number_of_heads=4,
         number_ts=25, ###This is needed for embeddings, you can have more than you need for prompt fine tuning 
-        num_of_clusters=None,  ### number of clusters of times series
+        number_of_clusters=None,  ### number of clusters of times series
         conv_activation = nn.GELU(),
         conv_FFN_activation = nn.GELU(),
         channel_shuffle = True,
@@ -25,6 +25,8 @@ class Model(nn.Module):
         conv_FFN_expansion_size = 4,
         conv_bias = True,
         attention_FFN_dropout = 0.2,
+        attention_head_dropout = 0.2,
+        attention_projection_dropout = 0.2,
         attention_FFN_activation = nn.GELU(),
         attention_FFN_bias = True,
         attention_FFN_expansion_size = 4,
@@ -36,7 +38,7 @@ class Model(nn.Module):
         self.width = lags // pool_size
         self.embedding_dim = embedding_dim
         ###
-        self.cluster_used = True if num_of_clusters is not None else False
+        self.cluster_used = True if number_of_clusters is not None else False
         ###
 
         self.up_sampling = Upsampling(
@@ -48,7 +50,7 @@ class Model(nn.Module):
             conv_activation=conv_activation,
             FFN_activation=  conv_FFN_activation,
             num_of_ts=number_ts,
-            num_of_clusters=num_of_clusters,
+            num_of_clusters=number_of_clusters,
             channel_shuffle = channel_shuffle,
             channel_shuffle_group=channel_shuffle_group,
             FFN_expansion_size= conv_FFN_expansion_size,           
@@ -64,7 +66,9 @@ class Model(nn.Module):
                     dropout_FFN=attention_FFN_dropout,
                     activation=attention_FFN_activation,
                     expansion_size= attention_FFN_expansion_size,
-                    bias_FFN=attention_FFN_bias
+                    bias_FFN=attention_FFN_bias,
+                    att_head_dropout= attention_head_dropout,
+                    projection_dropout=attention_projection_dropout
                 )
                 for _ in range(n_blocks)
             )
@@ -72,7 +76,7 @@ class Model(nn.Module):
         ### This dude is the final linear
         ### The same along all dimensions, we can replace it by an MLP
         self.Linear = nn.Sequential(*[layernorm(self.embedding_dim),
-            Linear(self.embedding_dim, 1, bias = True)
+            Linear(self.embedding_dim, 1, bias = True, dropout=0.0)
         ])
         ###
         ### here is the config dict to be used
@@ -83,7 +87,7 @@ class Model(nn.Module):
             "pool_size": pool_size,
             "number_of_heads": number_of_heads,
             "number_ts": number_ts,
-            "num_of_clusters": num_of_clusters,
+            "number_of_clusters": number_of_clusters,
             "conv_activation": conv_activation,
             "conv_FFN_activation": conv_FFN_activation,
             "channel_shuffle": channel_shuffle,
@@ -93,6 +97,8 @@ class Model(nn.Module):
             "conv_FFN_bias": conv_FFN_bias,
             "conv_FFN_expansion_size": conv_FFN_expansion_size,            
             "conv_bias": conv_bias,
+            "attention_head_dropout":attention_head_dropout,
+            "attention_projection_dropout": attention_projection_dropout,
             "attention_FFN_dropout": attention_FFN_dropout,
             "attention_FFN_activation": attention_FFN_activation,
             "attention_FFN_bias": attention_FFN_bias,
@@ -106,11 +112,10 @@ class Model(nn.Module):
             x = self.up_sampling((x, tse_embedding, cluster_embedding))
         else:
             x, tse_embedding = x[0], x[1]
-            y = self.up_sampling((x, tse_embedding))
+            x = self.up_sampling((x, tse_embedding))
         ## Concatted transformer blocks
         ###
-        x = self.blocks(y)
-        return self.Linear(x), x, y
+        return self.Linear(self.blocks(x))
 
     @classmethod
     def from_config_file(cls, config_file):
@@ -166,9 +171,8 @@ class Model(nn.Module):
         pass 
 
 """
-
-torch.manual_seed(2)
-model = Model(n_blocks=12, embedding_dim=768, pool_size=4, conv_FFN_expansion_size=4, channel_shuffle=True, channel_shuffle_group= 256)
+torch.manual_seed(0)
+model = Model()
 model.eval()
-model([torch.randn(10, 1, 512), torch.tensor([0])])[0].std()
-"""
+model([torch.randn(1, 1, 512), torch.tensor([2])]).std()
+"""                        

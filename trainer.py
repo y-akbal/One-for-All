@@ -63,12 +63,13 @@ class Trainer:
         self.model.train() ## Model in train mode!!!
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
-            output = self.model([source, cls_])
-            loss = F.mse_loss(output, targets)
+            output = self.model([source.unsqueeze(-2), cls_.unsqueeze(-1)])
+            loss = F.mse_loss(output.squeeze(), targets)
         self.scaler.scale(loss).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
         self.scheduler.step()
+        return loss.item()
 
     
     def _run_epoch(self, epoch):
@@ -77,11 +78,15 @@ class Trainer:
         self.train_data.sampler.set_epoch(epoch)
         for i, (source, targets, cls_, file_name) in enumerate(self.train_data):
             source, targets, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, targets, cls_])
-            self._run_batch(source, cls_, targets)
+            
+            local_loss = self._run_batch(source, cls_, targets)
+            if i % 5 == 0:
+                print(f"{i}th batch just passed!!! the loss is {local_loss}")
 
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):
             ## Do training on one epoch --
+            self.validate()
             if self.gpu_id == 0:
                 print(f"Epoch {self.epoch}")
             self._run_epoch(epoch)
@@ -89,7 +94,7 @@ class Trainer:
             if self.gpu_id == 0 and (epoch - 1) % self.save_every == 0:
                self._save_checkpoint(epoch)
             self.epoch += 1 #update epoch!!!             
-            self.validate()
+            
 
     def validate(self):
         if self.gpu_id == 0:
@@ -98,8 +103,8 @@ class Trainer:
         with torch.no_grad():  ## block tracking gradients
             for source, targets, cls_, file_name in self.val_data:
                 source, targets, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, targets, cls_])
-                output = self.model([source, cls_])  
-                loss = F.mse_loss(output, targets)
+                output = self.model([source.unsqueeze(-2), cls_.unsqueeze(-1)])
+                loss = F.mse_loss(output.squeeze(), targets)
                 self.val_loss_logger.update(loss.item())
             self.val_loss_logger.all_reduce()
             if self.gpu_id == 0:
