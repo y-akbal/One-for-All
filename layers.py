@@ -28,9 +28,9 @@ class Linear(
         kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.M = nn.Parameter(
-            torch.randn(size = (d_in, d_out), **kwargs)/((d_in+d_out)/2)*0.5
+            torch.empty((d_in, d_out), requires_grad=True, **kwargs)
         )  # Kaiming init
-        
+        torch.nn.init.kaiming_uniform_(self.M)
         self.bias = bias
         if self.bias:
             self.b = nn.Parameter(
