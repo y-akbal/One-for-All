@@ -6,15 +6,12 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from torch.distributed import init_process_group, destroy_process_group
 
-#from dataset_generator import ts_concatted
-#import numpy as np
-#import time
 from main_model import Model
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from trainer import Trainer
+from training_tools import loss_track, loss_track_MA
 from dataset_generator import data_set
-
 
 ## Needed really?
 torch.set_float32_matmul_precision("high")
@@ -52,12 +49,12 @@ def return_dataset(**kwargs):
     return train_dataloader, val_dataloader 
 
 
-def return_training_stuff(seed = 0, **cfg):
+def return_training_stuff(seed = 10, **cfg):
     keys = ["model_config", "optimizer_config","scheduler_config"]
     model_config, optimizer_config, scheduler_config = map(lambda x: cfg.__getitem__(x), keys)
     torch.manual_seed(seed)
     model = Model(**model_config)
-    optimizer = torch.optim.SGD(model.parameters(), **optimizer_config)
+    optimizer = torch.optim.AdamW(model.parameters(), **optimizer_config)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **scheduler_config)
     return model, optimizer, scheduler
 
@@ -79,6 +76,8 @@ def main(cfg : DictConfig):
             val_data = val_dataloader, 
             optimizer = optimizer, 
             scheduler = scheduler,
+            train_loss_logger = loss_track(project = "time_series_train_loss"),
+            val_loss_logger = loss_track(project= "time_series_val_loss"),
             **trainer_config,                        
         )
         trainer.train()

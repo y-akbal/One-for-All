@@ -169,10 +169,3 @@ class Model(nn.Module):
         ## place holder for single gpu long-term forcasting!!!
         ## padding kind of stuff will be added here!!!
         pass 
-
-"""
-torch.manual_seed(0)
-model = Model()
-model.eval()
-model([torch.randn(1, 1, 512), torch.tensor([2])]).std()
-"""                        
