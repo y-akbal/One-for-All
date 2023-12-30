@@ -90,9 +90,8 @@ class Trainer:
             self._run_batch(source, cls_)
             init_end.record() ## let's record it now!!!
             torch.cuda.synchronize() 
-            if i % 100 == 0:
-                self.train_loss_logger.all_reduce(self.gpu_id)
-                print(f"{i}th batch just passed!!! loss is {self.train_loss_logger.get_loss().item(), self.train_loss_logger.counter} lr is {self.scheduler.get_last_lr()}, Time for single batch {init_start.elapsed_time(init_end) / 1000}")
+            if i % 250 == 0:
+                print(f"{i}th batch just passed!!! loss is {self.train_loss_logger.loss} lr is {self.scheduler.get_last_lr()}, Time for single batch {init_start.elapsed_time(init_end) / 1000}")
                 
     
     def train(self):
@@ -103,12 +102,14 @@ class Trainer:
             self.model.train()
             self._run_epoch(epoch)
             self.scheduler.step()
+            self.train_loss_logger.all_reduce()
             self.train_loss_logger.reset()
             ## Some saving --
-            if self.gpu_id == 0 and (epoch - 1) % self.save_every == 0:
-               self._save_checkpoint(epoch)
             self.epoch += 1 #update epoch!!!             
             ## Let's do some validation
+            if self.gpu_id == 0 and (epoch - 1) % self.save_every == 0:
+               self._save_checkpoint()
+            ## Let's start the validation
             self.validate()
 
     def validate(self):
@@ -121,7 +122,7 @@ class Trainer:
                 output = self.model([source.unsqueeze(-2), cls_.unsqueeze(-1)])
                 loss = F.mse_loss(output.squeeze(), targets)
                 self.val_loss_logger.update(loss.item())
-            self.val_loss_logger.all_reduce()
+            self.val_loss_logger.all_reduce()            
             if self.gpu_id == 0:
                 print(self.val_loss_logger.loss)
             self.val_loss_logger.reset()

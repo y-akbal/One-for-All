@@ -259,6 +259,7 @@ class multi_head_attention(nn.Module):
 
         self.embedding_dim = embedding_dim
         self.linear = Linear(embedding_dim, embedding_dim, dropout = 0.0, bias = False)
+
         self.heads = heads
         self.causal = causal
         self.W = lag  ### Here W stands for width (or lags), redundant will not be needed really!!!!
@@ -285,7 +286,7 @@ class multi_head_attention(nn.Module):
         ## We need to change the causal factor to something better, to avoid working with static shapes!!!
         if self.causal:
             attention_scores = attention_scores.masked_fill(
-                self.causal_factor, -torch.inf
+                self.causal_factor[:L, :L], -torch.inf
             )
         
         softmaxed_att = nn.Softmax(-2)(attention_scores * self.embedding_dim ** (-0.5))
@@ -293,11 +294,12 @@ class multi_head_attention(nn.Module):
         att = self.att_dropout(
             softmaxed_att,
         )
-        t = KQV @ att
 
-        t = t.view(B, self.embedding_dim, self.W)
+        t = (KQV @ att).view(B, self.embedding_dim, L)
         ## Check the dropout of the output is applied here automatically!!!
-        return self.projection(t)
+        return self.projection(t), attention_scores
+
+
 
 
 class attention_block(nn.Module):
@@ -340,7 +342,6 @@ class attention_block(nn.Module):
         x = x + self.att_head(self.ln1(x))
         x = x + self.FFN(self.ln2(x))
         return x
-
 
 """
 torch.set_float32_matmul_precision("high")

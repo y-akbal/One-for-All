@@ -1,7 +1,7 @@
 model_config:
   lags: 512
-  embedding_dim: 512
-  n_blocks: 20
+  embedding_dim: 768
+  n_blocks: 12
   pool_size: 4
   number_of_heads: 8
   number_ts: 264
@@ -26,7 +26,7 @@ model_config:
   
 ### NOTES: 
 ###1) DO A FINAL CHECK ON ATTENTION DROPOUT STUFF
-###1.5) Loss syncronization along the worker remains problematic
+###1.5) Loss syncronization along the worker remains problematic --> this is fixed, need to do sync loss after each epoch!!!
 ###2) ATTENTION MASK IS IMPORTANT THEREFORE SHOULD HAVE DYNAMIC SHAPE
 ###3) CHECK LOSS LOGGER AND VAL_LOSS LOGGER AND WANDB STUFF IS IMPORTANT!!!
 ###4) CHECK THE AVERAGE AND STD OF OUTPUT AT 0TH INITIALIZATION
@@ -39,14 +39,14 @@ trainer_config:
   save_every: 1
   max_epochs: 5
   snapshot_name: "small_model"
-  snapshot_dir: "/model"
+  snapshot_dir: "model"
   compile_model: False
   use_wnb: False
 
   
 optimizer_config:
   lr: 0.0001
-  weight_decay: 0.05
+  #weight_decay: 0.05
   #momentum: 0.9
 
 scheduler_config:

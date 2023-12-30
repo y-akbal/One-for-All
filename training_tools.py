@@ -25,8 +25,9 @@ class loss_track:
         return self.temp_loss / self.counter
 
     def all_reduce(self):
-        all_reduce(self.temp_loss, ReduceOp.SUM, async_op = True)
         all_reduce(self.counter, ReduceOp.SUM, async_op = True)
+        all_reduce(self.temp_loss, ReduceOp.SUM, async_op = True)
+    
 
     @property
     def loss(self)->float:

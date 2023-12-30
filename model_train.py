@@ -77,7 +77,7 @@ def main(cfg : DictConfig):
             optimizer = optimizer, 
             scheduler = scheduler,
             train_loss_logger = loss_track(project = "time_series_train_loss", gpu_id=local_gpu_id),
-            val_loss_logger = loss_track(project= "time_series_val_loss", gpu_id=local_gpu_id),
+            val_loss_logger = loss_track(project= "time_series_val_loss",  gpu_id=local_gpu_id),
             **trainer_config,                        
         )
         trainer.train()
