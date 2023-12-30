@@ -44,6 +44,7 @@ class Trainer:
         ##
         self.val_loss_logger = val_loss_logger
         self.train_loss_logger = train_loss_logger
+        ##
         self.use_wnb = use_wnb
         ##
         ##
@@ -58,41 +59,45 @@ class Trainer:
         except Exception as e:
             print(f"There is a problem with loading the model weights and the problem is: {e}")
         
-    def _run_batch(self, source, cls_, targets):
+    def _run_batch(self, source, cls_):
         ### All the things like low precision training will happen here!!!
+        N = source.shape[1]
+        X, y = source[:, :-1], source[:,4:N:4]
+        ## -- ##        
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
-            output = self.model([source.unsqueeze(-2), cls_.unsqueeze(-1)])
-            loss = F.mse_loss(output.squeeze(), targets)
+            output = self.model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
+            loss = F.mse_loss(output.squeeze(), y)
         ## Log the loss
+
         ## Update the weights
+        self.train_loss_logger.update(loss)
         self.scaler.scale(loss).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
-
-        self.train_loss_logger.update(loss.item())
     
     def _run_epoch(self, epoch):
         #if epoch % report_in_every == 0 and self.gpu_id == 0:
         #    print(f"[GPU{self.gpu_id}] Epoch {epoch}")
         self.train_data.sampler.set_epoch(epoch)
-        for i, (source, targets, cls_, file_name) in enumerate(self.train_data):
-            source, targets, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, targets, cls_])
+        for i, (source, cls_, file_name) in enumerate(self.train_data):
+            source, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, cls_])
 
             init_start = torch.cuda.Event(enable_timing=True)
             init_end = torch.cuda.Event(enable_timing=True)
             
             init_start.record() ## How much time we spent!!!
-            self._run_batch(source, cls_, targets)
+            self._run_batch(source, cls_)
             init_end.record() ## let's record it now!!!
             torch.cuda.synchronize() 
-            if self.gpu_id == 0 and i % 100 == 0:
-                print(f"{i}th batch just passed!!! loss is {self.train_loss_logger.loss} lr is {self.scheduler.get_last_lr()}, Time for single batch {init_start.elapsed_time(init_end) / 1000}")
+            if i % 100 == 0:
+                self.train_loss_logger.all_reduce(self.gpu_id)
+                print(f"{i}th batch just passed!!! loss is {self.train_loss_logger.get_loss().item(), self.train_loss_logger.counter} lr is {self.scheduler.get_last_lr()}, Time for single batch {init_start.elapsed_time(init_end) / 1000}")
+                
+    
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):
             ## Do training on one epoch --
-            
-
             if self.gpu_id == 0:
                 print(f"Epoch {self.epoch}")
             self.model.train()

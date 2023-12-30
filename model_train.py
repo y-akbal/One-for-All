@@ -70,14 +70,14 @@ def main(cfg : DictConfig):
 
         trainer_config = cfg["trainer_config"]
         model, optimizer, scheduler = return_training_stuff(**cfg)
-        
+        local_gpu_id = int(os.environ["LOCAL_RANK"])
         trainer = Trainer(model = model, 
             train_data= train_dataloader,
             val_data = val_dataloader, 
             optimizer = optimizer, 
             scheduler = scheduler,
-            train_loss_logger = loss_track(project = "time_series_train_loss"),
-            val_loss_logger = loss_track(project= "time_series_val_loss"),
+            train_loss_logger = loss_track(project = "time_series_train_loss", gpu_id=local_gpu_id),
+            val_loss_logger = loss_track(project= "time_series_val_loss", gpu_id=local_gpu_id),
             **trainer_config,                        
         )
         trainer.train()

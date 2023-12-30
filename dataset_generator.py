@@ -39,8 +39,7 @@ class ts_concatted:
         place_ = self.__place__(i, self.cumhors)
 
         X = self.array[i + self.m[place_] : i + self.m[place_] + self.lags[place_]]
-        N = len(X)
-        return X[:-1], X[4:N:4], place_, self.__file_names__[place_]
+        return X, place_, self.__file_names__[place_]
 
     def __len__(self) -> int:
         return len(self.array) - sum(self.lags) + len(self.lags)

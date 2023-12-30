@@ -32,6 +32,8 @@ model_config:
 ###4) CHECK THE AVERAGE AND STD OF OUTPUT AT 0TH INITIALIZATION
 ###5) DO SYSTEMATIC ANALYSIS ON R2 VALUES SOMEWHAT
 ###6) SOME PROFILING WOULD BE VERY GOOD!!!
+####7) dataset_generator return entire X not X[:-1].... ## DONE
+###8) Do experiments with activation in the convolution
       
 trainer_config:
   save_every: 1
@@ -66,7 +68,7 @@ data:
 
   
   train_data_details:
-   batch_size: 32
+   batch_size: 64
    num_workers: 6
  # shuffle: True
    pin_memory: True

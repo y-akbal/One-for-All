@@ -7,32 +7,27 @@ from torch.distributed import (
 )
 
 class loss_track:
-    def __init__(self, project="time_series_pred"):
+    def __init__(self, project="time_series_pred", gpu_id = None):
         self.project = project
-        self.temp_loss = 0
-        self.counter = 1
+        self.gpu_id = gpu_id
+        self.temp_loss = torch.tensor([0.0], dtype = torch.float32).cuda(gpu_id)
+        self.counter = torch.tensor([1], dtype = torch.int).cuda(self.gpu_id)
 
     def update(self, loss):
         self.temp_loss += loss
         self.counter += 1
 
     def reset(self):
-        self.temp_loss = 0
-        self.counter = 1
+        self.temp_loss = torch.tensor([0.0], dtype = torch.float32).cuda(self.gpu_id)
+        self.counter =  torch.tensor([1], dtype = torch.int).cuda(self.gpu_id)
 
     def get_loss(self):
-        if self.counter == 0:
-            return self.temp_loss
         return self.temp_loss / self.counter
 
-    def all_reduce(self, gpu_id):
-        
-        loss_tensor = torch.tensor(
-            [self.temp_loss, self.counter], device=gpu_id, dtype=torch.float32
-            )
-        all_reduce(loss_tensor, ReduceOp.SUM, async_op=True)
-        self.temp_loss, self.counter = loss_tensor.tolist()
-    
+    def all_reduce(self):
+        all_reduce(self.temp_loss, ReduceOp.SUM, async_op = True)
+        all_reduce(self.counter, ReduceOp.SUM, async_op = True)
+
     @property
     def loss(self)->float:
         return self.temp_loss / self.counter
