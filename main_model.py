@@ -112,6 +112,7 @@ class Model(nn.Module):
             x = self.up_sampling((x, tse_embedding, cluster_embedding))
         else:
             x, tse_embedding = x[0], x[1]
+            
             x = self.up_sampling((x, tse_embedding))
         ## Concatted transformer blocks
         ###
@@ -169,3 +170,9 @@ class Model(nn.Module):
         ## place holder for single gpu long-term forcasting!!!
         ## padding kind of stuff will be added here!!!
         pass 
+
+
+"""
+x = torch.compile(Model().cuda())
+x([torch.randn(3, 1, 512).cuda(), torch.tensor([[i] for i in range(3)]).cuda()]).shape
+"""

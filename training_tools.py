@@ -31,7 +31,7 @@ class loss_track:
 
     @property
     def loss(self)->float:
-        return self.temp_loss / self.counter
+        return self.temp_loss.item() / self.counter.item()
 
 class loss_track_MA:
     """

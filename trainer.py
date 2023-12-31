@@ -67,14 +67,14 @@ class Trainer:
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
             output = self.model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
-            loss = F.mse_loss(output.squeeze(), y)
+            loss = F.mse_loss(output, y)
         ## Log the loss
 
         ## Update the weights
-        self.train_loss_logger.update(loss)
         self.scaler.scale(loss).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
+        self.train_loss_logger.update(loss.detach())
     
     def _run_epoch(self, epoch):
         #if epoch % report_in_every == 0 and self.gpu_id == 0:
@@ -119,8 +119,8 @@ class Trainer:
         with torch.no_grad():  ## block tracking gradients
             for source, targets, cls_, file_name in self.val_data:
                 source, targets, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, targets, cls_])
-                output = self.model([source.unsqueeze(-2), cls_.unsqueeze(-1)])
-                loss = F.mse_loss(output.squeeze(), targets)
+                output = self.model([source, cls_])
+                loss = F.mse_loss(output, targets)
                 self.val_loss_logger.update(loss.item())
             self.val_loss_logger.all_reduce()            
             if self.gpu_id == 0:

@@ -232,10 +232,11 @@ class Upsampling(nn.Module):
 
 
 
+x = torch.compile(Upsampling(d_out=768, lags = 512))
+x([torch.randn(3, 1, 512), torch.tensor([[1],[2],[3]])]).shape
 
 
 """
-Upsampling(d_out=768)([torch.randn(2, 1, 512), torch.tensor([1,2]).unsqueeze(-1)])
 
 torch.tensor([[1],[2]]).shape
 """
@@ -297,7 +298,7 @@ class multi_head_attention(nn.Module):
 
         t = (KQV @ att).view(B, self.embedding_dim, L)
         ## Check the dropout of the output is applied here automatically!!!
-        return self.projection(t), attention_scores
+        return self.projection(t)
 
 
 
