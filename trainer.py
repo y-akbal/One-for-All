@@ -4,7 +4,7 @@ from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 import os
-from training_tools import loss_track
+
 
 class Trainer:
     def __init__(
@@ -19,9 +19,9 @@ class Trainer:
         snapshot_dir:str = "model",
         snapshot_name:str = "model.pt",
         compile_model:bool = False,
-        use_wnb:bool = True,
         val_loss_logger = None,
         train_loss_logger = None,
+        wandb_loss_logger = None,
     ) -> None:
         self.gpu_id = int(os.environ["LOCAL_RANK"])
         self.model_config = model.config
@@ -45,7 +45,7 @@ class Trainer:
         self.val_loss_logger = val_loss_logger
         self.train_loss_logger = train_loss_logger
         ##
-        self.use_wnb = use_wnb
+        self.wandb_loss_logger = wandb_loss_logger
         ##
         ##
         self.autocast = torch.autocast
@@ -58,7 +58,9 @@ class Trainer:
             print(f"Training is continued from epoch {self.epoch}!!!")
         except Exception as e:
             print(f"There is a problem with loading the model weights and the problem is: {e}")
-        
+
+
+
     def _run_batch(self, source, cls_):
         ### All the things like low precision training will happen here!!!
         N = source.shape[1]
@@ -67,7 +69,7 @@ class Trainer:
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
             output = self.model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
-            loss = F.mse_loss(output, y)
+            loss = F.mse_loss(output.squeeze(), y.squeeze())
         ## Log the loss
 
         ## Update the weights
@@ -92,11 +94,13 @@ class Trainer:
             torch.cuda.synchronize() 
             if i % 250 == 0:
                 print(f"{i}th batch just passed!!! loss is {self.train_loss_logger.loss} lr is {self.scheduler.get_last_lr()}, Time for single batch {init_start.elapsed_time(init_end) / 1000}")
-                
+            ## logg the loss to wandb
+            self.wandb_loss_logger.log(self.train_loss_logger.loss)    
     
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):
             ## Do training on one epoch --
+            
             if self.gpu_id == 0:
                 print(f"Epoch {self.epoch}")
             self.model.train()
@@ -109,22 +113,26 @@ class Trainer:
             ## Let's do some validation
             if self.gpu_id == 0 and (epoch - 1) % self.save_every == 0:
                self._save_checkpoint()
-            ## Let's start the validation
+            ## Let's start the validation343
             self.validate()
+
 
     def validate(self):
         if self.gpu_id == 0:
             print("Validation started!!!")
         self.model.eval()
         with torch.no_grad():  ## block tracking gradients
-            for source, targets, cls_, file_name in self.val_data:
-                source, targets, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, targets, cls_])
-                output = self.model([source, cls_])
-                loss = F.mse_loss(output, targets)
-                self.val_loss_logger.update(loss.item())
+            for source, cls_, file_name in self.val_data:
+                source, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, cls_])
+                N = source.shape[1]
+                X, y = source[:, :-1], source[:,4:N:4]
+                output = self.model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
+                loss = F.mse_loss(output.squeeze(), y.squeeze())
+                self.val_loss_logger.update(loss.detach())
+                self.wandb_loss_logger.log(self.val_loss_logger.loss, log_type = "validation_loss")    
             self.val_loss_logger.all_reduce()            
             if self.gpu_id == 0:
-                print(self.val_loss_logger.loss)
+                print(f"Validation loss is {self.val_loss_logger.loss}")
             self.val_loss_logger.reset()
                 
 

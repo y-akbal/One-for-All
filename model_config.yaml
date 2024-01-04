@@ -29,13 +29,13 @@ model_config:
 ### 1.25) Adapth your code so that single GPU training works properly!!! with no reference do DDP sort'o stuff
 ### 1.35) Watch out the model shapes for torch.compile
 ###1.5) Loss syncronization along the worker remains problematic --> this is fixed, need to do sync loss after each epoch!!!
-###2) ATTENTION MASK IS IMPORTANT THEREFORE SHOULD HAVE DYNAMIC SHAPE
+###2) ATTENTION MASK IS IMPORTANT THEREFORE SHOULD HAVE DYNAMIC SHAPE --> This is also fixed, causal mask is now have a dynamic shape
 ###3) CHECK LOSS LOGGER AND VAL_LOSS LOGGER AND WANDB STUFF IS IMPORTANT!!!
-###4) CHECK THE AVERAGE AND STD OF OUTPUT AT 0TH INITIALIZATION
+###4) CHECK THE AVERAGE AND STD OF OUTPUT AT 0TH INITIALIZATION -> this is done, randn -> produce std of 0.4 and mean of 0.01
 ###5) DO SYSTEMATIC ANALYSIS ON R2 VALUES SOMEWHAT
 ###6) SOME PROFILING WOULD BE VERY GOOD!!!
 ####7) dataset_generator return entire X not X[:-1].... ## DONE
-###8) Do experiments with activation in the convolution
+###8) Do experiments with activation in the convolution 
       
 trainer_config:
   save_every: 1
@@ -43,7 +43,7 @@ trainer_config:
   snapshot_name: "small_model"
   snapshot_dir: "model"
   compile_model: False
-  use_wnb: False
+  
 
   
 optimizer_config:

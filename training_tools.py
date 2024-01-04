@@ -1,25 +1,28 @@
 import pickle
 import os
 import torch
+import wandb
 from torch.distributed import (
     all_reduce,
     ReduceOp,
 )
 
+
 class loss_track:
-    def __init__(self, project="time_series_pred", gpu_id = None):
-        self.project = project
+    def __init__(self, 
+                 gpu_id = None):
+        
         self.gpu_id = gpu_id
-        self.temp_loss = torch.tensor([0.0], dtype = torch.float32).cuda(gpu_id)
-        self.counter = torch.tensor([1], dtype = torch.int).cuda(self.gpu_id)
+        self.temp_loss = torch.tensor([0.0], dtype = torch.float32, requires_grad = False).cuda(gpu_id)
+        self.counter = torch.tensor([1], dtype = torch.int, requires_grad = False).cuda(self.gpu_id)
 
     def update(self, loss):
         self.temp_loss += loss
         self.counter += 1
 
     def reset(self):
-        self.temp_loss = torch.tensor([0.0], dtype = torch.float32).cuda(self.gpu_id)
-        self.counter =  torch.tensor([1], dtype = torch.int).cuda(self.gpu_id)
+        self.temp_loss = torch.tensor([0.0], dtype = torch.float32, requires_grad = False).cuda(self.gpu_id)
+        self.counter =  torch.tensor([1], dtype = torch.int, requires_grad = False).cuda(self.gpu_id)
 
     def get_loss(self):
         return self.temp_loss / self.counter
@@ -32,6 +35,23 @@ class loss_track:
     @property
     def loss(self)->float:
         return self.temp_loss.item() / self.counter.item()
+
+
+class wandb_loss_logger:
+    def __init__(self, 
+                 gpu_id,
+                 project_name,
+                 group, 
+                 **cfg):
+        wandb.login()
+        self.gpu_id = gpu_id
+        wandb.init(project = project_name,  config = cfg, group = group)
+    def log(self, loss:float, log_type = "training_loss"):
+        assert log_type in ["training_loss", "validation_loss"], "Wrong log_type"
+        if log_type == "training_loss":
+            wandb.log({f"training_loss_gpu": loss})
+        elif log_type == "validation_loss":
+            wandb.log({f"validation_loss_gpu": loss})
 
 class loss_track_MA:
     """

@@ -10,7 +10,7 @@ from main_model import Model
 import hydra
 from omegaconf import DictConfig, OmegaConf
 from trainer import Trainer
-from training_tools import loss_track, loss_track_MA
+from training_tools import loss_track, wandb_loss_logger
 from dataset_generator import data_set
 
 ## Needed really?
@@ -35,7 +35,7 @@ def return_dataset(**kwargs):
     
     
     train_sampler = DistributedSampler(train_data, shuffle = True)
-    validation_sampler = DistributedSampler(validation_data, shuffle = False)
+    validation_sampler = DistributedSampler(validation_data, shuffle = True)
     
     train_data_kwargs, val_data_kwargs = kwargs["train_data_details"], kwargs["val_data_details"]
 
@@ -49,8 +49,8 @@ def return_dataset(**kwargs):
     return train_dataloader, val_dataloader 
 
 
-def return_training_stuff(seed = 10, **cfg):
-    keys = ["model_config", "optimizer_config","scheduler_config"]
+def return_training_stuff(seed = 3, **cfg):
+    keys = ["model_config", "optimizer_config", "scheduler_config"]
     model_config, optimizer_config, scheduler_config = map(lambda x: cfg.__getitem__(x), keys)
     torch.manual_seed(seed)
     model = Model(**model_config)
@@ -71,13 +71,16 @@ def main(cfg : DictConfig):
         trainer_config = cfg["trainer_config"]
         model, optimizer, scheduler = return_training_stuff(**cfg)
         local_gpu_id = int(os.environ["LOCAL_RANK"])
+
         trainer = Trainer(model = model, 
             train_data= train_dataloader,
             val_data = val_dataloader, 
             optimizer = optimizer, 
             scheduler = scheduler,
-            train_loss_logger = loss_track(project = "time_series_train_loss", gpu_id=local_gpu_id),
-            val_loss_logger = loss_track(project= "time_series_val_loss",  gpu_id=local_gpu_id),
+            train_loss_logger = loss_track(gpu_id = local_gpu_id),
+            val_loss_logger = loss_track(gpu_id = local_gpu_id),
+            wandb_loss_logger = wandb_loss_logger(gpu_id = local_gpu_id, project_name = "One_for_All",
+                                                  group = f"distributed-{local_gpu_id}", **cfg),
             **trainer_config,                        
         )
         trainer.train()
