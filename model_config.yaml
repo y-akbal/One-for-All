@@ -1,7 +1,7 @@
 model_config:
   lags: 512
   embedding_dim: 768
-  n_blocks: 12
+  n_blocks: 8
   pool_size: 4
   number_of_heads: 8
   number_ts: 264
@@ -12,13 +12,13 @@ model_config:
   #conv_FFN_activation: F.gelu
   channel_shuffle: True
   channel_shuffle_group: 2
-  conv_dropout_FFN: 0.2
-  conv_dropout_linear: 0.2
+  conv_dropout_FFN: 0.4
+  conv_dropout_linear: 0.4
   conv_FFN_bias: True
-  conv_FFN_expansion_size: 2
+  conv_FFN_expansion_size: 4
   conv_bias: True
   # Attention_Block_Details #
-  attention_FFN_dropout: 0.2
+  attention_FFN_dropout: 0.4
   #attention_FFN_activation: F.gelu
   attention_FFN_bias: True
   attention_FFN_expansion_size: 4
@@ -78,7 +78,7 @@ data:
    prefetch_factor: 2
 
   val_data_details:
-   batch_size: 128
+   batch_size: 32
    num_workers: 4
 #   shuffle: False
    pin_memory: True

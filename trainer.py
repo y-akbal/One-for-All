@@ -71,7 +71,8 @@ class Trainer:
             output = self.model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
             loss = F.mse_loss(output.squeeze(), y.squeeze())
         ## Log the loss
-
+        ## logg the loss to wandb
+        self.wandb_loss_logger.log(loss.item())    
         ## Update the weights
         self.scaler.scale(loss).backward()
         self.scaler.step(self.optimizer)
@@ -94,8 +95,7 @@ class Trainer:
             torch.cuda.synchronize() 
             if i % 250 == 0:
                 print(f"{i}th batch just passed!!! loss is {self.train_loss_logger.loss} lr is {self.scheduler.get_last_lr()}, Time for single batch {init_start.elapsed_time(init_end) / 1000}")
-            ## logg the loss to wandb
-            self.wandb_loss_logger.log(self.train_loss_logger.loss)    
+            
     
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):

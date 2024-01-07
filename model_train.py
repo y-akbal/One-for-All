@@ -79,12 +79,11 @@ def main(cfg : DictConfig):
             scheduler = scheduler,
             train_loss_logger = loss_track(gpu_id = local_gpu_id),
             val_loss_logger = loss_track(gpu_id = local_gpu_id),
-            wandb_loss_logger = wandb_loss_logger(gpu_id = local_gpu_id, project_name = "One_for_All",
+            wandb_loss_logger = wandb_loss_logger(gpu_id = local_gpu_id, project_name = "One_for_All_lr",
                                                   group = f"distributed-{local_gpu_id}", **cfg),
             **trainer_config,                        
         )
         trainer.train()
-
 
 if __name__ == '__main__':
     main()

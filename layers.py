@@ -28,7 +28,7 @@ class Linear(
         kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.M = nn.Parameter(
-            torch.randn((d_in, d_out), requires_grad=True, **kwargs)/((d_in+d_out)/2)**0.5
+            torch.randn((d_in, d_out), requires_grad=True, **kwargs)/d_in
         )  # Kaiming init
         
         self.bias = bias
@@ -230,11 +230,11 @@ class Upsampling(nn.Module):
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
 
 
-
+"""
 
 x = torch.compile(Upsampling(d_out=768, lags = 512))
 x([torch.randn(3, 1, 512), torch.tensor([[1],[2],[3]])]).shape
-
+"""
 
 """
 

@@ -133,9 +133,10 @@ class Model(nn.Module):
     def from_pretrained(cls, file_name):
         try:
             dict_ = torch.load(file_name)
-            config = dict_["config"]
-            state_dict = dict_["state_dict"]
+            config = dict_["model_config"]
+            state_dict = dict_["model_state_dict"]
             model = cls(**config)
+
             model.load_state_dict(state_dict)
             print(
                 f"Model loaded successfully!!!! The current configuration is {config}"
@@ -155,8 +156,8 @@ class Model(nn.Module):
     def save_model(self, file_name = None):
         fn = "Model" if file_name == None else file_name
         model = {}
-        model["state_dict"] = self.state_dict()
-        model["config"] = self.config
+        model["model_state_dict"] = self.state_dict()
+        model["model_config"] = self.config
         try:
             torch.save(model, f"{fn}")
             print(
@@ -173,6 +174,8 @@ class Model(nn.Module):
 
 
 """
-x = torch.compile(Model().cuda())
-x([torch.randn(3, 1, 512).cuda(), torch.tensor([[i] for i in range(3)]).cuda()]).shape
+x = Model().cuda()
+q = torch.torch.distributions.Uniform(low=-0.01, high=0.01).sample((10, 1, 512))
+x.eval()
+x([q.cuda(), torch.tensor([[1] for i in range(10)]).cuda()]).mean()
 """

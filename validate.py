@@ -1,58 +1,80 @@
 import os
 import torch
 from torch import nn as nn
-from torch.nn import functional as F
-from torch.utils.data import DataLoader, Dataset
+#from torch.nn import functional as F
+from torch.utils.data import DataLoader#, Dataset
 from main_model import Model
-from dataset_generator import ts_concatted
+from dataset_generator import ts_concatted, data_set
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
+import argparse
+
+torch.set_float32_matmul_precision('high')
+
+DATA_DIR = "data"
+DATA_FILES = "array_test.dat", "lengthsarray_test.dat", "names_array_test.txt"
+BATCH_SIZE = 768
+LAGSIZE = 512
 
 
-"""
-## The idea is as follows:
-model = nn.Sequential(*[nn.Linear(100,10),nn.GELU(),nn.Linear(10, 10)])
-model.eval()
-
-X = np.random.normal(size = (1000, 100)).astype(np.float32)
-with torch.no_grad():
-    y = model(torch.tensor(X, dtype = torch.float32)).numpy()
-
-
-class dd(Dataset):
-    def __init__(self):
-        self.X = X
-        self.y = y
-    def __getitem__(self, i):
-        return torch.tensor(self.X[i], dtype = torch.float32), torch.tensor(self.y[i], dtype = torch.float32)
-    def __len__(self):
-        return len(self.X)
-d = dd()
-data = DataLoader(d, batch_size = 32, shuffle = False)
-
-y_out = np.zeros(d.y.shape)
-l = []
-with torch.no_grad():
-    for i, (x,y) in enumerate(data):
-        y_output = model(x).numpy()
-        y_out[32*i:32*(i+1)] = y_output
-## okito dokito        
-
-np.isclose(y_out, d.y) ### great succeesss!!!!
+def return_dataset(data_dir:str = DATA_DIR,
+                    data_files:tuple[str, str, str] = DATA_FILES,
+                    batch_size:int = BATCH_SIZE,
+                    lag_size = LAGSIZE)-> DataLoader:
+    
+    file_name, lengths_name, names_file  = map(lambda x: os.path.join(data_dir, x), data_files)
+     
+    data = data_set(**{"file":file_name, "length_file":lengths_name, "lags":lag_size, "file_names":names_file})
+    batched_data = DataLoader(data, batch_size = batch_size, shuffle=False, num_workers= 10, prefetch_factor = 3)
+    print(f"Data set loaded successfully, it has {len(batched_data)} many batches!!!")
+    return batched_data
 
 """
+for x, cls, file_name in return_dataset():
+    print(x.shape, cls.shape, file_name)
+"""
 
-
-def return_dataset(**kwargs):
-    memmap_data = np.memmap(kwargs["array_name"], dtype=np.float32)
-    memmap_lengths = np.memmap(kwargs["lengths_array"], dtype=np.int32)
-    lags = kwargs["lags"]
-    lags = [lags for _ in memmap_lengths]
-    data_ = ts_concatted(
-        **{"array": memmap_data, "lengths": memmap_lengths, "lags": lags}
+def preprocess_model_file(model_state:dict) -> dict:
+    ## 1) This dude moves to states to cpu, in which case you would like to do stuff on cpu
+    ## 2) Since the model is trained using DDP, the weights are somehow has weird names, this is the place
+    ## - that we change the names!!!
+    new_model_state_dict = {}
+    for keys, values in model_state.items():
+        if "module" in keys:
+            keys = keys.replace("module.", "")
+        new_model_state_dict[keys] = values.cpu()
+    return new_model_state_dict
+    
+def return_model(**kwargs)->tuple[nn.Module, int]:
+    file_name = os.path.join(kwargs["model_dir"], kwargs["model_file"])
+    states = torch.load(file_name)
+    ## -- determine the device -- ##
+    gpu_0 = kwargs["gpu"]
+    ## -- ##
+    device = (
+        f"cuda:{gpu_0}"
+        if torch.cuda.is_available() and kwargs["gpu"] is not None
+        else "cpu"
     )
-    return data_
+    device = torch.device(device)
+    print(f"The device to be used is {device}")
+    ## -- ## ok we now load the model!!!
+    model_state_dict = preprocess_model_file(states["model_state_dict"])
+    model_config = states["model_config"]
+    print(model_config)
+    ## create the model
+    model = Model.from_data_class(model_config)
+    model.load_state_dict(model_state_dict),
+    model.eval()
+    model = model.to(device)
+    if kwargs["compile_model"] == "True":
+        model = torch.compile(model)
+        print("The model loaded and compiled successfully!!!")
+        return model, device
+   
+    print("Model loaded successfully!!!")
+    return model, device
 
 
 def main(**kwargs):
@@ -65,49 +87,27 @@ def main(**kwargs):
     4) Do the metric computations
     """
     ### First grab the data:
-    data = return_dataset(**kwargs)
-    batch_size = kwargs["batch_size"]
-    batched_data = DataLoader(data, batch_size=batch_size, shuffle=False)
+    batched_data = return_dataset()
     ## -- ##
     ## Let's load the model from trained file ##
-    file_name = kwargs["model_file"]
-    ## -- determine the device -- ##
-    gpu_0 = kwargs["gpu"]
-    device = (
-        f"cuda:{gpu_0}"
-        if torch.cuda.is_available() and kwargs["gpu"] is not None
-        else "cpu"
-    )
-    device = torch.device(device)
-    print(f"The device to be used is {device}")
-    ## -- ## ok we now load the model!!!
-    try:
-        model = Model.from_pretrained(file_name).to(device)
-        if kwargs["compile"]:
-            torch.set_float32_matmul_precision("high")
-            model = torch.compile(model)
-        model.eval()
-
-    except Exception as exp:
-        print(f"Something went wrong with {exp}!!!")
+    model, device = return_model(**kwargs)
     ## -- ##
-    ### If we come so far everything shoud be good ## Let's run one and one epoch!!!
-    ### I know that this is not the best way to do this but I promise to fix it later,
-    ### I need to at least train some model, to see how the things work in practice,
-    ###
     Y_output = []
     Y = []
     TSE = []
     data_ = tqdm(batched_data)
-    with torch.no_grad():
-        for x, y, tse in data_:
-            x, tse = map(lambda x: x.to(device).unsqueeze(1), [x, tse])
-            y_output = model((x, tse)).squeeze()
+    with torch.inference_mode():
+        for source, cls_, file_name in data_:
+            source, cls_ = map(lambda x: x.to(device, non_blocking=True), [source, cls_])
+            N = source.shape[1]
+            X, y = source[:, :-1], source[:,4:N:4]
+            with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+                y_output = model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
             y_output = y_output.to("cpu").numpy()
             Y_output.append(y_output[:, -1])
-            Y.append(y[:, -1])
-            TSE.append(tse.squeeze().to("cpu").numpy())
-            # print(i, x.shape, y.shape, y_output.shape, tse.shape)
+            Y.append(y[:, -1].to("cpu").numpy())
+            TSE.append(file_name)
+            
 
     ## -- ##
     ## We next convert everything into a np array--!!!
@@ -130,54 +130,46 @@ def main(**kwargs):
     ### -- ###
     ###Our metrics will be R^2, MAE, MSE ###
     ### We shall give R^2 for each different city, as this is important to mention ###
-
+ 
 
 if __name__ == "__main__":
-    import argparse
 
     parser = argparse.ArgumentParser(description="Validation of model on a dataset")
 
     parser.add_argument(
-        "--array_name",
+        "--model_dir",
+        default="model",
         type=str,
-        help="concatted time series",
+        help="directory of model files",
     )
-    parser.add_argument(
-        "--lengths_array",
-        type=str,
-        help="lenghts of concatted time series",
-    )
-    parser.add_argument(
-        "--lags",
-        default=513,
-        type=str,
-        help="lags to be used",
-        ### Here 512 + 1 --- here 1 is saved for the next days prediction!!!
-    )
-    parser.add_argument(
-        "--batch_size",
-        default=1024,
-        type=str,
-        help="lenghts of concatted time series",
-    )
+
     parser.add_argument(
         "--model_file",
+        default="small_model_",
         type=str,
         help="config file to create the model that has been already trained",
     )
+
     parser.add_argument(
-        "--compile",
+        "--compile_model",
+        default="False",
         type=str,
-        default=False,
-        help="config file to create the model that has been already trained",
+        help="Compile model for fast inference!!!",
     )
+
+    parser.add_argument(
+        "--gpu",
+        default = 0,
+        type=int,
+        help="GPU to use for inference!!!",
+    )
+
     parser.add_argument(
         "--report_file",
         default="report.csv",
         type=str,
         help="Report file to be written",
     )
-    parser.add_argument("--gpu", default=0, type=int, help="CUDA device to use")
     args = parser.parse_args()
     ### --- ###
     kwargs = vars(args)
