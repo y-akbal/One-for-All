@@ -71,7 +71,7 @@ def main(cfg : DictConfig):
         trainer_config = cfg["trainer_config"]
         model, optimizer, scheduler = return_training_stuff(**cfg)
         local_gpu_id = int(os.environ["LOCAL_RANK"])
-
+        
         trainer = Trainer(model = model, 
             train_data= train_dataloader,
             val_data = val_dataloader, 
@@ -79,8 +79,7 @@ def main(cfg : DictConfig):
             scheduler = scheduler,
             train_loss_logger = loss_track(gpu_id = local_gpu_id),
             val_loss_logger = loss_track(gpu_id = local_gpu_id),
-            wandb_loss_logger = wandb_loss_logger(gpu_id = local_gpu_id, project_name = "One_for_All_lr",
-                                                  group = f"distributed-{local_gpu_id}", **cfg),
+            wandb_loss_logger = wandb_loss_logger(gpu_id = local_gpu_id, **cfg),
             **trainer_config,                        
         )
         trainer.train()

@@ -14,7 +14,7 @@ torch.set_float32_matmul_precision('high')
 
 DATA_DIR = "data"
 DATA_FILES = "array_test.dat", "lengthsarray_test.dat", "names_array_test.txt"
-BATCH_SIZE = 768
+BATCH_SIZE = 64
 LAGSIZE = 512
 
 
@@ -26,7 +26,12 @@ def return_dataset(data_dir:str = DATA_DIR,
     file_name, lengths_name, names_file  = map(lambda x: os.path.join(data_dir, x), data_files)
      
     data = data_set(**{"file":file_name, "length_file":lengths_name, "lags":lag_size, "file_names":names_file})
-    batched_data = DataLoader(data, batch_size = batch_size, shuffle=False, num_workers= 10, prefetch_factor = 3)
+    batched_data = DataLoader(data, 
+                              batch_size = batch_size, 
+                              shuffle=False, 
+                              num_workers= 4, 
+                              prefetch_factor = 2,
+                              drop_last = True)
     print(f"Data set loaded successfully, it has {len(batched_data)} many batches!!!")
     return batched_data
 
@@ -36,11 +41,9 @@ for x, cls, file_name in return_dataset():
 """
 
 def preprocess_model_file(model_state:dict) -> dict:
-    ## 1) This dude moves to states to cpu, in which case you would like to do stuff on cpu
-    ## 2) Since the model is trained using DDP, the weights are somehow has weird names, this is the place
-    ## - that we change the names!!!
     new_model_state_dict = {}
     for keys, values in model_state.items():
+        ## This is needed because the save model is from DDP and therefore module. is used in weights
         if "module" in keys:
             keys = keys.replace("module.", "")
         new_model_state_dict[keys] = values.cpu()
@@ -70,12 +73,18 @@ def return_model(**kwargs)->tuple[nn.Module, int]:
     model = model.to(device)
     if kwargs["compile_model"] == "True":
         model = torch.compile(model)
-        print("The model loaded and compiled successfully!!!")
+        print("The model loaded succesfully and to be compiled now!")
         return model, device
    
     print("Model loaded successfully!!!")
     return model, device
 
+def tuple_to_list(list_:list[tuple])->list[float]:
+    L = []
+    for tuple_ in list_:
+        for j in tuple_:
+            L.append(j)
+    return L
 
 def main(**kwargs):
     """
@@ -96,41 +105,40 @@ def main(**kwargs):
     Y = []
     TSE = []
     data_ = tqdm(batched_data)
+    print(f"There are {len(batched_data)} many batches!!!")
+    #Data_Array = torch.zeros_like(torch.empty((BATCH_SIZE*len(batched_data)), 2))
+    # Ok here we will malloc some arrays, and then fill out this array with the required data
     with torch.inference_mode():
-        for source, cls_, file_name in data_:
+        for i, (source, cls_, file_name) in enumerate(data_):
             source, cls_ = map(lambda x: x.to(device, non_blocking=True), [source, cls_])
             N = source.shape[1]
             X, y = source[:, :-1], source[:,4:N:4]
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
                 y_output = model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
+            #print(y_output.squeeze()[:, -1].shape, y[:, -1].shape)
             y_output = y_output.to("cpu").numpy()
-            Y_output.append(y_output[:, -1])
-            Y.append(y[:, -1].to("cpu").numpy())
-            TSE.append(file_name)
+            Y_output.append(y_output.squeeze())
+            Y.append(y.to("cpu").numpy())
             
+            TSE.append(file_name)
+            #print(y_output.shape, y.shape)
 
-    ## -- ##
-    ## We next convert everything into a np array--!!!
-    map_array = map(lambda x: np.array(x).flatten(), [Y_output, Y, TSE])
-    # for l in map_array:
-    #   print(l.shape)
-    dict_ = {name: array for name, array in zip(["TSE", "Y_output", "Y"], map_array)}
-    ### -- ###
+    TSE = tuple_to_list(TSE)    
 
-    data_frame = pd.DataFrame().from_dict(dict_)
+    Y_pred_concatted = np.concatenate(Y_output, axis = 0)
+    Y_true_concatted = np.concatenate(Y, axis = 0)
+    # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - #
+    print(Y_pred_concatted.shape, Y_true_concatted.shape)
+    Y_pred_vs_true = np.concatenate((Y_true_concatted, Y_pred_concatted), axis = 1)
     try:
-        data_frame.to_csv("results.csv")
+        df = pd.DataFrame(Y_pred_vs_true)
+        df["name"] = TSE
+        df.to_csv("test.csv")
+        print("CSV file created")
     except Exception as e:
-        print(f"Something went wrong with {e}")
- 
- 
- 
-    ### We have now converted everything into a csv file--!!!
-    ### -- ###
-    ### -- ###
-    ###Our metrics will be R^2, MAE, MSE ###
-    ### We shall give R^2 for each different city, as this is important to mention ###
- 
+        print(f"Something went wrong with the conversion!!! {e}")
+    return None
+    
 
 if __name__ == "__main__":
 

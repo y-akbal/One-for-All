@@ -25,8 +25,10 @@ class Trainer:
     ) -> None:
         self.gpu_id = int(os.environ["LOCAL_RANK"])
         self.model_config = model.config
+        self.pool_size = model.config["pool_size"] ## to be used in forward pass
         self.model = model.to(self.gpu_id)
-        self.model = DDP(self.model, device_ids=[self.gpu_id])
+        self.model = DDP(model, device_ids=[self.gpu_id])
+
         if compile_model:
             self.model = torch.compile(self.model)
         ##
@@ -52,7 +54,6 @@ class Trainer:
         self.scaler = torch.cuda.amp.GradScaler()
         ## training details ##
         self.epoch = 1
-
         try:
             self._load_checkpoint(self.PATH)
             print(f"Training is continued from epoch {self.epoch}!!!")
@@ -64,7 +65,7 @@ class Trainer:
     def _run_batch(self, source, cls_):
         ### All the things like low precision training will happen here!!!
         N = source.shape[1]
-        X, y = source[:, :-1], source[:,4:N:4]
+        X, y = source[:, :-1], source[:,self.pool_size:N:self.pool_size]
         ## -- ##        
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
@@ -100,7 +101,8 @@ class Trainer:
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):
             ## Do training on one epoch --
-            
+            self.validate()
+
             if self.gpu_id == 0:
                 print(f"Epoch {self.epoch}")
             self.model.train()
@@ -113,8 +115,8 @@ class Trainer:
             ## Let's do some validation
             if self.gpu_id == 0 and (epoch - 1) % self.save_every == 0:
                self._save_checkpoint()
-            ## Let's start the validation343
-            self.validate()
+            ## Let's start the validation
+
 
 
     def validate(self):
@@ -125,12 +127,12 @@ class Trainer:
             for source, cls_, file_name in self.val_data:
                 source, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, cls_])
                 N = source.shape[1]
-                X, y = source[:, :-1], source[:,4:N:4]
+                X, y = source[:, :-1], source[:,self.pool_size:N:self.pool_size]
                 output = self.model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
                 loss = F.mse_loss(output.squeeze(), y.squeeze())
                 self.val_loss_logger.update(loss.detach())
-                self.wandb_loss_logger.log(self.val_loss_logger.loss, log_type = "validation_loss")    
             self.val_loss_logger.all_reduce()            
+            self.wandb_loss_logger.log(self.val_loss_logger.loss, log_type = "validation_loss")    
             if self.gpu_id == 0:
                 print(f"Validation loss is {self.val_loss_logger.loss}")
             self.val_loss_logger.reset()

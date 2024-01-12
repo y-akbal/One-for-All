@@ -40,11 +40,11 @@ class loss_track:
 class wandb_loss_logger:
     def __init__(self, 
                  gpu_id,
-                 project_name,
-                 group, 
                  **cfg):
         wandb.login()
         self.gpu_id = gpu_id
+        project_name = cfg["project_name"]["project_name"]
+        group = cfg["project_name"]["group_name"]
         wandb.init(project = project_name,  config = cfg, group = group)
     def log(self, loss:float, log_type = "training_loss"):
         assert log_type in ["training_loss", "validation_loss"], "Wrong log_type"
