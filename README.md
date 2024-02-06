@@ -11,3 +11,8 @@ Some files related to the upcoming manuscript which revolves around ensemble lea
 
 
 
+<p align="center">
+
+<img src="assets/memes.png" width="512" class="center"/>
+
+</p>
