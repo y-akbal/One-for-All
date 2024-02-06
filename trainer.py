@@ -101,8 +101,6 @@ class Trainer:
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):
             ## Do training on one epoch --
-            self.validate()
-
             if self.gpu_id == 0:
                 print(f"Epoch {self.epoch}")
             self.model.train()
@@ -116,7 +114,7 @@ class Trainer:
             if self.gpu_id == 0 and (epoch - 1) % self.save_every == 0:
                self._save_checkpoint()
             ## Let's start the validation
-
+            self.validate()
 
 
     def validate(self):

@@ -263,7 +263,7 @@ class multi_head_attention(nn.Module):
 
         self.heads = heads
         self.causal = causal
-        self.W = lag  ### Here W stands for width (or lags), redundant will not be needed really!!!!
+        #self.W = lag  ### Here W stands for width (or lags), redundant will not be needed really!!!!
         self.att_dropout = nn.Dropout(p=att_head_dropout)
         ## output linear
         self.projection = Linear(embedding_dim, embedding_dim, bias=True, dropout = projection_dropout)
@@ -273,7 +273,7 @@ class multi_head_attention(nn.Module):
             self.register_buffer(
                 "causal_factor",
                 torch.tril(
-                    torch.ones(self.W, self.W, dtype=torch.bool),
+                    torch.ones(lag , lag , dtype=torch.bool),
                     diagonal=-1,
                 ),
             )

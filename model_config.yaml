@@ -1,10 +1,12 @@
 
+#torchrun --standalone --nnodes=1 --nproc-per-node=2  model_train.py
+
 model_config:
   lags: 512
-  embedding_dim: 768
+  embedding_dim: 512
   n_blocks: 15
   pool_size: 8
-  number_of_heads: 8
+  number_of_heads: 16
   number_ts: 264
   #number_of_clusters: None
   ## As long as really want to experiment, do not touch any part of below ##
@@ -13,33 +15,33 @@ model_config:
   #conv_FFN_activation: F.gelu
   channel_shuffle: True
   channel_shuffle_group: 2
-  conv_dropout_FFN: 0.4
-  conv_dropout_linear: 0.4
+  conv_dropout_FFN: 0.5
+  conv_dropout_linear: 0.5
   conv_FFN_bias: True
-  conv_FFN_expansion_size: 4
+  conv_FFN_expansion_size: 2
   conv_bias: True
   # Attention_Block_Details #
-  attention_FFN_dropout: 0.4
+  attention_FFN_dropout: 0.5
   #attention_FFN_activation: F.gelu
   attention_FFN_bias: True
   attention_FFN_expansion_size: 4
   
 project_name:
   project_name: "One_For_All_Pool_8"
-  group_name: "Group_"
+  group_name: "Group_1"
 
 trainer_config:
   save_every: 1
-  max_epochs: 5
-  snapshot_name: "small_model"
+  max_epochs: 10
+  snapshot_name: "small_model_1"
   snapshot_dir: "model_pool_8"
   compile_model: False
   
 
   
 optimizer_config:
-  lr: 0.0001
-  weight_decay: 0.09
+  lr: 0.001
+  weight_decay: 0.0
   #momentum: 0.9
 
 scheduler_config:
@@ -52,16 +54,16 @@ data:
    file: "data/array_train.dat"
    length_file: "data/lengthsarray_train.dat"
    file_names: "data/names_array_train.txt"
-   lags: 512 # 512 -> 1 prediction, we will do
+   lags: 256 # 512 -> 1 prediction, we will do
   val_path:
    file: "data/array_test.dat"
    length_file: "data/lengthsarray_test.dat"
    file_names: "data/names_array_test.txt"
-   lags: 512 # 512 -> 1 prediction, we will do
+   lags: 256 # 512 -> 1 prediction, we will do
 
   
   train_data_details:
-   batch_size: 64
+   batch_size: 128
    num_workers: 12
  # shuffle: True
    pin_memory: True
