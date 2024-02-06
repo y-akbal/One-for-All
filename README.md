@@ -13,6 +13,6 @@ Some files related to the upcoming manuscript which revolves around ensemble lea
 
 <p align="center">
 
-<img src="assets/memes.png" width="512" class="center"/>
+<img src="assets/one_for_all.jpg" width="256" class="center"/>
 
 </p>
