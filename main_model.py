@@ -1,7 +1,7 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-from layers import attention_block, Upsampling, Linear, layernorm
+from layers import attention_block, Upsampling, Linear, layernorm, LUpsampling
 import pickle
 
 
@@ -17,8 +17,6 @@ class Model(nn.Module):
         number_of_clusters=None,  ### number of clusters of times series
         conv_activation = nn.GELU(),
         conv_FFN_activation = nn.GELU(),
-        channel_shuffle = True,
-        channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
         conv_dropout_FFN = 0.2,
         conv_dropout_linear = 0.2,
         conv_FFN_bias = True,
@@ -41,7 +39,7 @@ class Model(nn.Module):
         self.cluster_used = True if number_of_clusters is not None else False
         ###
 
-        self.up_sampling = Upsampling(
+        self.up_sampling = LUpsampling(
             lags=lags,
             d_out=self.embedding_dim,
             pool_size=pool_size,
@@ -51,8 +49,6 @@ class Model(nn.Module):
             FFN_activation=  conv_FFN_activation,
             num_of_ts=number_ts,
             num_of_clusters=number_of_clusters,
-            channel_shuffle = channel_shuffle,
-            channel_shuffle_group=channel_shuffle_group,
             FFN_expansion_size= conv_FFN_expansion_size,           
             dropout_FFN = conv_dropout_FFN,
             dropout_linear = conv_dropout_linear,
@@ -61,7 +57,7 @@ class Model(nn.Module):
             *(
                 attention_block(
                     d_in = embedding_dim,
-                    width=self.width,
+                    width=lags,
                     n_heads=number_of_heads,
                     dropout_FFN=attention_FFN_dropout,
                     activation=attention_FFN_activation,
@@ -90,8 +86,6 @@ class Model(nn.Module):
             "number_of_clusters": number_of_clusters,
             "conv_activation": conv_activation,
             "conv_FFN_activation": conv_FFN_activation,
-            "channel_shuffle": channel_shuffle,
-            "channel_shuffle_group": channel_shuffle_group,
             "conv_dropout_FFN": conv_dropout_FFN,
             "conv_dropout_linear": conv_dropout_linear,
             "conv_FFN_bias": conv_FFN_bias,
@@ -108,15 +102,17 @@ class Model(nn.Module):
     def forward(self, x):
         ## Here we go with upsampling layer
         if self.cluster_used:
-            x, tse_embedding, cluster_embedding = x[0], x[1], x[2]
+            x, tse_embedding, cluster_embedding = x[0].unsqueeze(-2), x[1].unsqueeze(-1), x[2]
             x = self.up_sampling((x, tse_embedding, cluster_embedding))
-        else:
-            x, tse_embedding = x[0], x[1]
             
+        else:
+            x, tse_embedding = x[0].unsqueeze(-2), x[1].unsqueeze(-1)
             x = self.up_sampling((x, tse_embedding))
+            
         ## Concatted transformer blocks
         ###
-        return self.Linear(self.blocks(x))
+
+        return self.Linear(self.blocks(x)).squeeze()
 
     @classmethod
     def from_config_file(cls, config_file):
@@ -172,10 +168,14 @@ class Model(nn.Module):
         ## padding kind of stuff will be added here!!!
         pass 
 
+torch.manual_seed(0)
+Model(lags = 128)([torch.randn(1, 3), torch.tensor([1])])
+
+
 
 """
-x = Model().cuda()
-q = torch.torch.distributions.Uniform(low=-0.01, high=0.01).sample((10, 1, 512))
+x = Model()
+q = torch.torch.distributions.Uniform(low=-1, high=1).sample((1, 512))
 x.eval()
-x([q.cuda(), torch.tensor([[1] for i in range(10)]).cuda()]).mean()
+x([q, torch.tensor([5])]).std()
 """

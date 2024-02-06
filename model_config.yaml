@@ -1,11 +1,9 @@
 
-#torchrun --standalone --nnodes=1 --nproc-per-node=2  model_train.py
-
 model_config:
-  lags: 512
-  embedding_dim: 512
-  n_blocks: 15
-  pool_size: 8
+  lags: 512 ## this is for maximum lags, above which overflow will occur
+  embedding_dim: 768
+  n_blocks: 12
+  pool_size: 16
   number_of_heads: 16
   number_ts: 264
   #number_of_clusters: None
@@ -13,8 +11,6 @@ model_config:
   ## Upsampling_Details ##
   #conv_activation: F.gelu
   #conv_FFN_activation: F.gelu
-  channel_shuffle: True
-  channel_shuffle_group: 2
   conv_dropout_FFN: 0.5
   conv_dropout_linear: 0.5
   conv_FFN_bias: True
@@ -27,8 +23,11 @@ model_config:
   attention_FFN_expansion_size: 4
   
 project_name:
-  project_name: "One_For_All_Pool_8"
-  group_name: "Group_1"
+  project_name: "One_For_All_Pool_8_dense"
+  group_name: "Group_1_padded"
+  
+  
+  
 
 trainer_config:
   save_every: 1
@@ -40,7 +39,7 @@ trainer_config:
 
   
 optimizer_config:
-  lr: 0.001
+  lr: 0.0005
   weight_decay: 0.0
   #momentum: 0.9
 
@@ -54,16 +53,16 @@ data:
    file: "data/array_train.dat"
    length_file: "data/lengthsarray_train.dat"
    file_names: "data/names_array_train.txt"
-   lags: 256 # 512 -> 1 prediction, we will do
+   lags: 128 # 512 -> 1 prediction, we will do
   val_path:
    file: "data/array_test.dat"
    length_file: "data/lengthsarray_test.dat"
    file_names: "data/names_array_test.txt"
-   lags: 256 # 512 -> 1 prediction, we will do
+   lags: 128 # 512 -> 1 prediction, we will do
 
   
   train_data_details:
-   batch_size: 128
+   batch_size:  64
    num_workers: 12
  # shuffle: True
    pin_memory: True
@@ -71,7 +70,7 @@ data:
    prefetch_factor: 2
 
   val_data_details:
-   batch_size: 32
+   batch_size: 64
    num_workers: 4
 #   shuffle: False
    pin_memory: True

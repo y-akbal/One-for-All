@@ -32,12 +32,11 @@ class ddp_setup(object):
 
 
 def return_dataset(**kwargs):
-    train_dataset, val_dataset = kwargs["train_path"], kwargs["val_path"]
-    train_data, validation_data = data_set(**train_dataset), data_set(**val_dataset)
-    
+    train_kwargs, val_kwargs = kwargs["train_path"], kwargs["val_path"]
+    train_data, validation_data = data_set(**train_kwargs), data_set(**val_kwargs)
     
     train_sampler = DistributedSampler(train_data, shuffle = True)
-    validation_sampler = DistributedSampler(validation_data, shuffle = True)
+    validation_sampler = DistributedSampler(validation_data, shuffle = False)
     
     train_data_kwargs, val_data_kwargs = kwargs["train_data_details"], kwargs["val_data_details"]
 
@@ -58,6 +57,7 @@ def return_training_stuff(seed = 3, **cfg):
     model = Model(**model_config)
     optimizer = torch.optim.AdamW(model.parameters(), **optimizer_config)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **scheduler_config)
+    
     return model, optimizer, scheduler
 
 

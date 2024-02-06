@@ -1,6 +1,5 @@
 import torch
 from torch import nn as nn
-from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 import os
@@ -64,13 +63,16 @@ class Trainer:
 
     def _run_batch(self, source, cls_):
         ### All the things like low precision training will happen here!!!
-        N = source.shape[1]
-        X, y = source[:, :-1], source[:,self.pool_size:N:self.pool_size]
+        ## Source -> BxW (Lag+1) 
+        ## x <--lag, y <--1
+        #print(X.shape, y.shape, source[:,-1].shape)
         ## -- ##        
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
-            output = self.model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
-            loss = F.mse_loss(output.squeeze(), y.squeeze())
+            X, y = source[:, :-1], source[:,-1]  
+            output = self.model([X, cls_])[:, -1]
+            loss = F.mse_loss(output, y)
+        #print(X.shape, y.shape, source[:,-1].shape, output.shape, cls_.shape, source.shape)
         ## Log the loss
         ## logg the loss to wandb
         self.wandb_loss_logger.log(loss.item())    
@@ -94,7 +96,7 @@ class Trainer:
             self._run_batch(source, cls_)
             init_end.record() ## let's record it now!!!
             torch.cuda.synchronize() 
-            if i % 250 == 0:
+            if i % 10 == 0:
                 print(f"{i}th batch just passed!!! loss is {self.train_loss_logger.loss} lr is {self.scheduler.get_last_lr()}, Time for single batch {init_start.elapsed_time(init_end) / 1000}")
             
     
@@ -124,10 +126,9 @@ class Trainer:
         with torch.no_grad():  ## block tracking gradients
             for source, cls_, file_name in self.val_data:
                 source, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, cls_])
-                N = source.shape[1]
-                X, y = source[:, :-1], source[:,self.pool_size:N:self.pool_size]
-                output = self.model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
-                loss = F.mse_loss(output.squeeze(), y.squeeze())
+                X, y = source[:, :-1], source[:,-1]  
+                output = self.model([X, cls_])[:, -1]
+                loss = F.mse_loss(output, y)
                 self.val_loss_logger.update(loss.detach())
             self.val_loss_logger.all_reduce()            
             self.wandb_loss_logger.log(self.val_loss_logger.loss, log_type = "validation_loss")    

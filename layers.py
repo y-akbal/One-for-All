@@ -92,25 +92,6 @@ class layernorm(nn.Module):
 
 
 
-def channel_shuffleF(x, groups):
-    ## Grabbed this from https://github.com/jaxony/ShuffleNet/blob/master/model.py
-    ## Asdjusted properly
-    ## Do not know, why the hell we have this layer though, it serves some purpose I believe,
-    batchsize, height, width = x.shape
-
-    channels_per_group = height // groups
-
-    # reshape
-    x = x.view(batchsize, groups, channels_per_group, width)
-
-    x = torch.transpose(x, 1, 2).contiguous()
-
-    # flatten
-    x = x.view(batchsize, -1, width)
-
-    return x
-
-
 class Upsampling(nn.Module):
     def __init__(
         self,
@@ -123,8 +104,6 @@ class Upsampling(nn.Module):
         FFN_activation=nn.GELU("tanh"),
         num_of_ts=25,  ### number of time series to be used
         num_of_clusters=None,  ### number of clusters of times series
-        channel_shuffle=True,  ### we add channel shuffle trick
-        channel_shuffle_group=2,  ## active only and only when channel_shuffle is True
         dropout_FFN=0.2,  ## droput of FFN layer,
         dropout_linear=0.2,  ##dropout of linear layer,
         FFN_expansion_size = 2,
@@ -138,7 +117,6 @@ class Upsampling(nn.Module):
         self.num_pools = int(lags / pool_size)
         self.num_of_ts = num_of_ts
         self.lags = lags
-        self.channel_shuffle = channel_shuffle
 
         ### ---- Beginning of layers ---- ###
         ## Convolution layer first,
@@ -183,12 +161,6 @@ class Upsampling(nn.Module):
             self.cls_embedding = nn.Embedding(num_of_clusters, d_out)
         ## -- End of Embedding Layers -- ##
 
-        self.shuffle = (
-            lambda x: channel_shuffleF(x, channel_shuffle_group)
-            if self.channel_shuffle
-            else x
-        )
-
     def forward(self, x: tuple) -> torch.Tensor:
         if self.num_of_clusters != None:
             ts, te, tc = x  ## split
@@ -208,10 +180,6 @@ class Upsampling(nn.Module):
         activated = self.conv_activation(convolved_ts)  # BxHxW -> BxHxW
         normalized = self.normalization(activated)  # BxHxW -> BxHxW
         
-        ###
-        # if self.channel_shuffle:
-        normalized = self.shuffle(normalized)
-
         # BxHxW -> BxHxW (Dense layer is applied H dim)
         dense_applied = self.FFN(normalized)
         # BxHxW += #BxHxW (WxH -> HxW) + #BxHx1 -> BxHxW   # Position embedding of time series
@@ -230,21 +198,140 @@ class Upsampling(nn.Module):
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
 
 
+
+
+class LUpsampling(nn.Module):
+    def __init__(
+        self,
+        lags: int = 256,  ### input dimension (width)
+        d_out=128,  ## output dimension (height)
+        pool_size=4,  ## pool_sizes
+        conv_bias=True, ## Convolutional layer bias
+        dense_bias=True, ## FFN bias
+        conv_activation=nn.GELU("tanh"),
+        FFN_activation=nn.GELU("tanh"),
+        num_of_ts=25,  ### number of time series to be used
+        num_of_clusters=None,  ### number of clusters of times series
+        dropout_FFN=0.2,  ## droput of FFN layer,
+        dropout_linear=0.2,  ##dropout of linear layer,
+        FFN_expansion_size = 2,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        ## The difference between this layer and the above upsampling layer: stride = 1, instead of stride = pool_size
+        ## We also pad the inputs from right!!!!
+        self.pool_size = pool_size
+        self.num_pools = lags
+        self.num_of_ts = num_of_ts
+        self.lags = lags
+        ### ---- Beginning of layers ---- ###
+        ## Convolution layer first,
+        self.Conv = nn.Conv1d(
+            in_channels=1,
+            out_channels=d_out,
+            kernel_size=pool_size,
+            bias=conv_bias,
+        )
+        self.conv_activation = (
+            conv_activation if conv_activation != None else torch.nn.Identity()
+        )
+        ## Normalization layer
+        self.normalization = layernorm(d_out)
+        ## FFN part
+        self.FFN = FFN(
+            d_in=d_out, 
+            bias=dense_bias, 
+            dropout=dropout_FFN, 
+            activation=FFN_activation,
+            expansion_size= FFN_expansion_size,
+        )
+        ## Linear Layer
+        self.linear = Linear(d_out, d_out, bias=True, dropout=dropout_linear)
+        ### Embedding enumeration
+        self.register_buffer(
+            "num_enum",
+            torch.tensor(
+                [i for i in range(self.num_pools)],
+                dtype=torch.int,
+                requires_grad=False,
+            ),
+        )
+        ## positional embedding of pools ##
+        self.pe_embedding = nn.Embedding(self.num_pools, d_out)
+        ## positional embeddings of time series
+        self.ts_embedding = nn.Embedding(self.num_of_ts, d_out)
+        ## cluster embedding of time series
+        self.num_of_clusters = num_of_clusters
+        if num_of_clusters != None:
+            self.cls_embedding = nn.Embedding(num_of_clusters, d_out)
+        ## -- End of Embedding Layers -- ##
+
+    def forward(self, x: tuple) -> torch.Tensor:
+        if self.num_of_clusters != None:
+            ts, te, tc = x  ## split
+        else:
+            ts, te = x  ## split
+
+        # ts: Bx1xW (W here is used for Lags) the raw time series,
+        # pe: (BxHxW) positional embeddings of time series,
+        # te: Enumeration for Embedding (geospatial) of the time series depending.
+        # tc: Clustered time series enumeration for depending on geospatial data
+        ts_padded = F.pad(ts, (self.pool_size-1, 0), "constant")
+
+        convolved_ts = self.Conv(ts_padded)  # Bx1xW -> BxHxW
+        ## From now on we convey W = W/pool_size
+        # BxHxW += #BxHxW (WxH -> HxW)   # Position embedding of pools
+        convolved_ts += self.pe_embedding(self.num_enum[:convolved_ts.shape[-1]]).transpose(-1, -2)
+
+
+        activated = self.conv_activation(convolved_ts)  # BxHxW -> BxHxW
+        normalized = self.normalization(activated)  # BxHxW -> BxHxW
+        # BxHxW -> BxHxW (Dense layer is applied H dim)
+        dense_applied = self.FFN(normalized)
+        # BxHxW += #BxHxW (WxH -> HxW) + #BxHx1 -> BxHxW   # Position embedding of time series
+        if self.num_of_clusters != None:
+            dense_applied += (
+                convolved_ts  ### Residual connection here
+                + self.ts_embedding(te).transpose(-1, -2)  ### time series empeedings
+                + self.cls_embedding(tc).transpose(
+                    -1, -2
+                )  ### cluster embeddings to help the model
+            )
+        else:
+            dense_applied += normalized + self.ts_embedding(te).transpose(-1, -2)
+        ## Final linear layer two mix the channels
+        return self.linear(dense_applied)  # BxHxW-> BxHxW
+        # Bx1xW-> BxHxW/pool_size (this what happens finally)
+
+""""
+LUpsampling(pool_size=10)([torch.randn(2, 1, 256), torch.tensor([[2],[1]])]).shape
+
+
+q = F.pad(torch.ones(1, 1, 4), (2,0),"constant")
+layer = nn.Conv1d(1, 1, kernel_size = 2, padding = "valid")
+layer.state_dict()
+layer(q)
 """
 
-x = torch.compile(Upsampling(d_out=768, lags = 512))
-x([torch.randn(3, 1, 512), torch.tensor([[1],[2],[3]])]).shape
-"""
 
 """
 
-torch.tensor([[1],[2]]).shape
+torch.manual_seed(0)
+x = LUpsampling(d_out=768, lags = 512, pool_size=8)
+q = torch.torch.distributions.Uniform(low=-1, high=1).sample((1, 1, 512))
+x.eval()
+x = x([q, torch.tensor([13])])
+
 """
+
+
+
 
 class multi_head_attention(nn.Module):
     """This dude is a bit faster than the original provided that we do not use flash attention!!!"""
 
-    def __init__(self, embedding_dim=768, 
+    def __init__(self, 
+                 embedding_dim=768, 
                  heads=4, 
                  lag=512, 
                  projection_dropout=0.2, 
@@ -344,6 +431,9 @@ class attention_block(nn.Module):
         x = x + self.FFN(self.ln2(x))
         return x
 
+
+
+#attention_block(768, 504)(x)
 """
 torch.set_float32_matmul_precision("high")
 lay = block(n_heads=8)
