@@ -53,8 +53,10 @@ def return_dataset(**kwargs):
 def return_training_stuff(seed = 3, **cfg):
     keys = ["model_config", "optimizer_config", "scheduler_config"]
     model_config, optimizer_config, scheduler_config = map(lambda x: cfg.__getitem__(x), keys)
+    
     torch.manual_seed(seed)
     model = Model(**model_config)
+    
     optimizer = torch.optim.AdamW(model.parameters(), **optimizer_config)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, **scheduler_config)
     
@@ -81,9 +83,10 @@ def main(cfg : DictConfig):
             scheduler = scheduler,
             train_loss_logger = loss_track(gpu_id = local_gpu_id),
             val_loss_logger = loss_track(gpu_id = local_gpu_id),
-            wandb_loss_logger = wandb_loss_logger(gpu_id = local_gpu_id, **cfg),
+            wandb_loss_logger = wandb_loss_logger(**cfg),
             **trainer_config,                        
         )
+
         trainer.train()
 
 if __name__ == '__main__':

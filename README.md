@@ -15,6 +15,7 @@ Some files related to the upcoming manuscript which revolves around ensemble lea
 6) validate.py is for validation purposses, for instance to see R^2, MSE, MAE, MAPE values on both train and validation set. 
 7) wandb integration is almost complete!
 8) Use as many GPUs as you like. DDP is implemented!!!
+9) Train loss and validation loss calculations are done directly on GPUs, and reduced via NCCL.
 
 
   

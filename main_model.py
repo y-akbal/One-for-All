@@ -168,9 +168,10 @@ class Model(nn.Module):
         ## padding kind of stuff will be added here!!!
         pass 
 
+"""
 torch.manual_seed(0)
 Model(lags = 128)([torch.randn(1, 3), torch.tensor([1])])
-
+"""
 
 
 """

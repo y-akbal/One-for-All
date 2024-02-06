@@ -1,10 +1,10 @@
 
 model_config:
-  lags: 512 ## this is for maximum lags, above which overflow will occur
+  lags: 256 ## this is for maximum lags, above which overflow will occur
   embedding_dim: 768
   n_blocks: 12
-  pool_size: 16
-  number_of_heads: 16
+  pool_size: 8
+  number_of_heads: 8
   number_ts: 264
   #number_of_clusters: None
   ## As long as really want to experiment, do not touch any part of below ##
@@ -40,11 +40,11 @@ trainer_config:
   
 optimizer_config:
   lr: 0.0005
-  weight_decay: 0.0
+  weight_decay: 0.001
   #momentum: 0.9
 
 scheduler_config:
-  T_0: 300
+  T_0: 5
   eta_min: 0.0000088
 
 
@@ -62,7 +62,7 @@ data:
 
   
   train_data_details:
-   batch_size:  64
+   batch_size:  92
    num_workers: 12
  # shuffle: True
    pin_memory: True
@@ -70,7 +70,7 @@ data:
    prefetch_factor: 2
 
   val_data_details:
-   batch_size: 64
+   batch_size: 128
    num_workers: 4
 #   shuffle: False
    pin_memory: True

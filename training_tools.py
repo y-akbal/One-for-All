@@ -35,14 +35,13 @@ class loss_track:
     @property
     def loss(self)->float:
         return self.temp_loss.item() / self.counter.item()
+    
 
 
 class wandb_loss_logger:
-    def __init__(self, 
-                 gpu_id,
+    def __init__(self,
                  **cfg):
         wandb.login()
-        self.gpu_id = gpu_id
         project_name = cfg["project_name"]["project_name"]
         group = cfg["project_name"]["group_name"]
         wandb.init(project = project_name,  config = cfg, group = group)

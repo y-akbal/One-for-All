@@ -105,6 +105,7 @@ class Trainer:
             ## Do training on one epoch --
             if self.gpu_id == 0:
                 print(f"Epoch {self.epoch}")
+            
             self.model.train()
             self._run_epoch(epoch)
             self.scheduler.step()
@@ -124,11 +125,12 @@ class Trainer:
             print("Validation started!!!")
         self.model.eval()
         with torch.no_grad():  ## block tracking gradients
-            for source, cls_, file_name in self.val_data:
+            for i, (source, cls_, file_name) in enumerate(self.val_data):
                 source, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, cls_])
-                X, y = source[:, :-1], source[:,-1]  
-                output = self.model([X, cls_])[:, -1]
-                loss = F.mse_loss(output, y)
+                with self.autocast(device_type="cuda", dtype=torch.bfloat16):
+                    X, y = source[:, :-1], source[:,-1]  
+                    output = self.model([X, cls_])[:, -1]
+                    loss = F.mse_loss(output, y)
                 self.val_loss_logger.update(loss.detach())
             self.val_loss_logger.all_reduce()            
             self.wandb_loss_logger.log(self.val_loss_logger.loss, log_type = "validation_loss")    
