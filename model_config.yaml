@@ -53,12 +53,12 @@ data:
    file: "data/array_train.dat"
    length_file: "data/lengthsarray_train.dat"
    file_names: "data/names_array_train.txt"
-   lags: 128 # 512 -> 1 prediction, we will do
+   lags: 128 # 128 -> 1 prediction, we will do
   val_path:
    file: "data/array_test.dat"
    length_file: "data/lengthsarray_test.dat"
    file_names: "data/names_array_test.txt"
-   lags: 128 # 512 -> 1 prediction, we will do
+   lags: 128 # 128 -> 1 prediction, we will do
 
   
   train_data_details:
