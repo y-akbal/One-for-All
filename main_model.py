@@ -152,6 +152,12 @@ class Model(nn.Module):
             return cls(**data_class)
         else:
             return cls(**data_class.__dict__)
+    
+    def __init__weights__(self, seed = 0):
+        ## To be used for better initialization depending on the depth of the layers!!!
+        ## Lower layers may require a bit larget gradients!!!
+        pass
+
 
     def save_model(self, file_name = None):
         fn = "Model" if file_name == None else file_name
@@ -169,16 +175,17 @@ class Model(nn.Module):
     @torch.no_grad()
     def generate(self, 
                  x_init:tuple[torch.Tensor,torch.Tensor], 
-                 horizon:int = 10,
-                 device = "cpu"                 
+                 horizon:int = 10,              
                  ):
         ## Batched long term forcast --- 
+
+        device = f"cuda:{x_init[0].get_device()}" if x_init[0].get_device() >= 0 else "cpu" ## Get the device
 
         B, L = x_init[0].shape
         if L + horizon > self.lags:
             print(f"The model can handle long term forcasts up to horizon {self.lags}, while yours {L+horizon}. The begining of the series will be clipped!!!")
 
-        horizon_predictions = torch.empty(B, L+horizon)  ## In malloc we trust!!!
+        horizon_predictions = torch.empty(B, L+horizon, device = device) ## In malloc we trust!!!
         horizon_predictions[:, :L] = x_init[0]
 
         tqdm_range =  tqdm(range(horizon))
@@ -193,13 +200,19 @@ class Model(nn.Module):
 
         return horizon_predictions
 
+
+
 """
 torch.manual_seed(0)
-model = Model(lags = 128, embedding_dim= 128)
-#model([torch.randn(1, 4), torch.tensor([1])])
+model = Model(lags = 128, embedding_dim= 128).cuda()
+model([torch.randn(1, 4).cuda(), torch.tensor([1]).cuda()])
 torch.manual_seed(0)
-q = torch.randn(2, 5)
-model.generate([q, torch.tensor([1,3])], horizon = 20)
+q = torch.randn(100, 50).cuda()
+model.generate([q, torch.tensor([3 for i in range(100)]).cuda()], horizon = 150).shape
+
+
+
+
 """
 
 """
