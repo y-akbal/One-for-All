@@ -305,11 +305,12 @@ class PUpsampling(nn.Module):
         else:
             dense_applied += normalized
         ## Final linear layer two mix the channels
-        return self.linear(dense_applied) + self.ts_embedding(te).transpose(-1, -2) # BxHxW-> BxHxW
+        return self.linear(dense_applied) + self.ts_embedding(te).transpose(-1, -2)
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
     
 """
-PUpsampling(d_out = 128,pool_size=10)([torch.randn(2, 1, 8), torch.tensor([[2],[1]])]).shape
+torch.manual_seed(0)
+PUpsampling(d_out = 64,pool_size=10)([torch.randn(2, 1, 4), torch.tensor([[7],[2]])])
 
 a,b,c =x.shape
 y = y.unsqueeze(0).repeat(a,1,1)

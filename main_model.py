@@ -3,6 +3,8 @@ from torch import nn as nn
 from torch.nn import functional as F
 from layers import attention_block, Upsampling, Linear, layernorm, LUpsampling, PUpsampling
 import pickle
+import typing
+from tqdm import tqdm
 
 
 class Model(nn.Module):
@@ -33,6 +35,7 @@ class Model(nn.Module):
             lags / pool_size
         ).is_integer(), "Lag size should be divisible by pool_size"
         super().__init__()
+        self.lags = lags
         self.width = lags // pool_size
         self.embedding_dim = embedding_dim
         ###
@@ -99,20 +102,21 @@ class Model(nn.Module):
             "attention_FFN_expansion_size": attention_FFN_expansion_size,
         }
 
-    def forward(self, x):
+    def forward(self, x:tuple[torch.Tensor, torch.Tensor]):
         ## Here we go with upsampling layer
         if self.cluster_used:
             x, tse_embedding, cluster_embedding = x[0].unsqueeze(-2), x[1].unsqueeze(-1), x[2]
             x = self.up_sampling((x, tse_embedding, cluster_embedding))
             
         else:
-            x, tse_embedding = x[0].unsqueeze(-2), x[1].unsqueeze(-1)
-            x = self.up_sampling((x, tse_embedding))
+            x_, tse_embedding = x[0].unsqueeze(-2), x[1].unsqueeze(-1)
+            
+            x = self.up_sampling((x_, tse_embedding))
             
         ## Concatted transformer blocks
         ###
 
-        return self.Linear(self.blocks(x)).squeeze()
+        return self.Linear(self.blocks(x)).squeeze(-2)
 
     @classmethod
     def from_config_file(cls, config_file):
@@ -163,16 +167,40 @@ class Model(nn.Module):
             print(f"Something went wrong with {exp}!!!!!")
 
     @torch.no_grad()
-    def generate(self, **kwargs):
-        ## place holder for single gpu long-term forcasting!!!
-        ## padding kind of stuff will be added here!!!
-        pass 
+    def generate(self, 
+                 x_init:tuple[torch.Tensor,torch.Tensor], 
+                 horizon:int = 10,
+                 device = "cpu"                 
+                 ):
+        ## Batched long term forcast --- 
+
+        B, L = x_init[0].shape
+        if L + horizon > self.lags:
+            print(f"The model can handle long term forcasts up to horizon {self.lags}, while yours {L+horizon}. The begining of the series will be clipped!!!")
+
+        horizon_predictions = torch.empty(B, L+horizon)  ## In malloc we trust!!!
+        horizon_predictions[:, :L] = x_init[0]
+
+        tqdm_range =  tqdm(range(horizon))
+        
+        for i in tqdm_range:
+            if L+i <= self.lags:
+                next_lag = self([horizon_predictions[:, :L+i], x_init[1]])[:, -1]
+            else:
+                next_lag = self([horizon_predictions[:, -self.lags +(L+i):L+i], x_init[1]])[:, -1]
+
+            horizon_predictions[:, L+i] = next_lag
+
+        return horizon_predictions
 
 """
 torch.manual_seed(0)
-Model(lags = 128)([torch.randn(1, 3), torch.tensor([1])])
+model = Model(lags = 128, embedding_dim= 128)
+#model([torch.randn(1, 4), torch.tensor([1])])
+torch.manual_seed(0)
+q = torch.randn(2, 5)
+model.generate([q, torch.tensor([1,3])], horizon = 20)
 """
-
 
 """
 x = Model()
