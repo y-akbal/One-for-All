@@ -4,7 +4,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 import os
 
-
+#torchrun --standalone --nnodes=1 --nproc-per-node=2  model_train.py
 class Trainer:
     def __init__(
         self,
@@ -69,9 +69,10 @@ class Trainer:
         ## -- ##        
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
-            X, y = source[:, :-1], source[:,-1]  
-            output = self.model([X, cls_])[:, -1]
+            X, y = source[:, :-1], source[:,1:]  
+            output = self.model([X, cls_])
             loss = F.mse_loss(output, y)
+        
         #print(X.shape, y.shape, source[:,-1].shape, output.shape, cls_.shape, source.shape)
         ## Log the loss
         ## logg the loss to wandb
@@ -96,12 +97,13 @@ class Trainer:
             self._run_batch(source, cls_)
             init_end.record() ## let's record it now!!!
             torch.cuda.synchronize() 
-            if i % 10 == 0:
+            if i % 500 == 0:
                 print(f"{i}th batch just passed!!! loss is {self.train_loss_logger.loss} lr is {self.scheduler.get_last_lr()}, Time for single batch {init_start.elapsed_time(init_end) / 1000}")
             
     
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):
+            
             ## Do training on one epoch --
             if self.gpu_id == 0:
                 print(f"Epoch {self.epoch}")
@@ -119,7 +121,6 @@ class Trainer:
             ## Let's start the validation
             self.validate()
 
-
     def validate(self):
         if self.gpu_id == 0:
             print("Validation started!!!")
@@ -133,6 +134,7 @@ class Trainer:
                     loss = F.mse_loss(output, y)
                 self.val_loss_logger.update(loss.detach())
             self.val_loss_logger.all_reduce()            
+
             self.wandb_loss_logger.log(self.val_loss_logger.loss, log_type = "validation_loss")    
             if self.gpu_id == 0:
                 print(f"Validation loss is {self.val_loss_logger.loss}")

@@ -1,5 +1,6 @@
 import os
 os.environ["TORCH_DISTRIBUTED_DEBUG"] = "INFO"
+os.environ["OMP_NUM_THREADS"] = "2"
 
 
 import torch

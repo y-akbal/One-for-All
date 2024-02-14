@@ -1,7 +1,7 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
-from layers import attention_block, Upsampling, Linear, layernorm, LUpsampling
+from layers import attention_block, Upsampling, Linear, layernorm, LUpsampling, PUpsampling
 import pickle
 
 
@@ -15,7 +15,7 @@ class Model(nn.Module):
         number_of_heads=4,
         number_ts=25, ###This is needed for embeddings, you can have more than you need for prompt fine tuning 
         number_of_clusters=None,  ### number of clusters of times series
-        conv_activation = nn.GELU(),
+        conv_activation = None,
         conv_FFN_activation = nn.GELU(),
         conv_dropout_FFN = 0.2,
         conv_dropout_linear = 0.2,
@@ -39,13 +39,13 @@ class Model(nn.Module):
         self.cluster_used = True if number_of_clusters is not None else False
         ###
 
-        self.up_sampling = LUpsampling(
+        self.up_sampling = PUpsampling(
             lags=lags,
             d_out=self.embedding_dim,
             pool_size=pool_size,
             conv_bias= conv_bias, 
             dense_bias= conv_FFN_bias,
-            conv_activation=conv_activation,
+            conv_activation= conv_activation,
             FFN_activation=  conv_FFN_activation,
             num_of_ts=number_ts,
             num_of_clusters=number_of_clusters,

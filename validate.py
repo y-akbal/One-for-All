@@ -12,11 +12,12 @@ import argparse
 
 torch.set_float32_matmul_precision('high')
 
+#python validate.py --model_file small_model_epoch4 --compile_model True
+
 DATA_DIR = "data"
 DATA_FILES = "array_test.dat", "lengthsarray_test.dat", "names_array_test.txt"
 BATCH_SIZE = 64
-LAGSIZE = 512
-
+LAGSIZE = 256
 
 def return_dataset(data_dir:str = DATA_DIR,
                     data_files:tuple[str, str, str] = DATA_FILES,
@@ -86,7 +87,7 @@ def tuple_to_list(list_:list[tuple])->list[float]:
             L.append(j)
     return L
 
-def main(**kwargs):
+def main(**kwargs)->None:
     """
     things to do here
     1) Create the model -- ok
@@ -108,28 +109,30 @@ def main(**kwargs):
     print(f"There are {len(batched_data)} many batches!!!")
     #Data_Array = torch.zeros_like(torch.empty((BATCH_SIZE*len(batched_data)), 2))
     # Ok here we will malloc some arrays, and then fill out this array with the required data
+    ## torch.inference_mode() here is important!!!
     with torch.inference_mode():
         for i, (source, cls_, file_name) in enumerate(data_):
             source, cls_ = map(lambda x: x.to(device, non_blocking=True), [source, cls_])
-            N = source.shape[1]
-            X, y = source[:, :-1], source[:,4:N:4]
+            X, y = source[:, :-1], source[:,-1]  
             with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-                y_output = model([X.unsqueeze(-2), cls_.unsqueeze(-1)])
+                y_output = model([X, cls_])[:, -1]
             #print(y_output.squeeze()[:, -1].shape, y[:, -1].shape)
+            #print((((y-y_output)**2).mean()).item())
             y_output = y_output.to("cpu").numpy()
             Y_output.append(y_output.squeeze())
             Y.append(y.to("cpu").numpy())
-            
             TSE.append(file_name)
             #print(y_output.shape, y.shape)
+
 
     TSE = tuple_to_list(TSE)    
 
     Y_pred_concatted = np.concatenate(Y_output, axis = 0)
     Y_true_concatted = np.concatenate(Y, axis = 0)
+
     # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - # - #
-    print(Y_pred_concatted.shape, Y_true_concatted.shape)
-    Y_pred_vs_true = np.concatenate((Y_true_concatted, Y_pred_concatted), axis = 1)
+    print(Y_pred_concatted.shape, Y_true_concatted.shape, len(TSE))
+    Y_pred_vs_true = np.vstack((Y_true_concatted, Y_pred_concatted)).transpose(-1,-2)
     try:
         df = pd.DataFrame(Y_pred_vs_true)
         df["name"] = TSE
@@ -167,7 +170,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--gpu",
-        default = 0,
+        default = 1,
         type=int,
         help="GPU to use for inference!!!",
     )
