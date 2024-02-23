@@ -28,6 +28,8 @@ class Trainer:
         self.model = model.to(self.gpu_id)
         self.model = DDP(model, device_ids=[self.gpu_id])
 
+        self.ema_model = torch.optim.swa_utils.AveragedModel(self.model).to(self.gpu_id)
+
         if compile_model:
             self.model = torch.compile(self.model)
         ##
@@ -69,8 +71,8 @@ class Trainer:
         ## -- ##        
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
-            X, y = source[:, :-1], source[:,1:]  
-            output = self.model([X, cls_])
+            X, y = source[:, :-1], source[:,-1]  
+            output = self.model([X, cls_])[:, -1]
             loss = F.mse_loss(output, y)
         
         #print(X.shape, y.shape, source[:,-1].shape, output.shape, cls_.shape, source.shape)
@@ -81,8 +83,13 @@ class Trainer:
         self.scaler.scale(loss).backward()
         self.scaler.step(self.optimizer)
         self.scaler.update()
+
+        self.ema_model.update_parameters(self.model)
+        
+        
+
         self.train_loss_logger.update(loss.detach())
-    
+
     def _run_epoch(self, epoch):
         #if epoch % report_in_every == 0 and self.gpu_id == 0:
         #    print(f"[GPU{self.gpu_id}] Epoch {epoch}")
@@ -103,7 +110,6 @@ class Trainer:
     
     def train(self):
         for epoch in range(self.epoch, self.max_epochs):
-            
             ## Do training on one epoch --
             if self.gpu_id == 0:
                 print(f"Epoch {self.epoch}")
@@ -119,18 +125,19 @@ class Trainer:
             if self.gpu_id == 0 and (epoch - 1) % self.save_every == 0:
                self._save_checkpoint()
             ## Let's start the validation
-            self.validate()
+            self._save_checkpoint()
+
 
     def validate(self):
         if self.gpu_id == 0:
-            print("Validation started!!!")
+            print("Validation started!!! on GPU:{self.gpu_id}")
         self.model.eval()
         with torch.no_grad():  ## block tracking gradients
             for i, (source, cls_, file_name) in enumerate(self.val_data):
                 source, cls_ = map(lambda x: x.to(self.gpu_id, non_blocking=True), [source, cls_])
                 with self.autocast(device_type="cuda", dtype=torch.bfloat16):
                     X, y = source[:, :-1], source[:,-1]  
-                    output = self.model([X, cls_])[:, -1]
+                    output = self.ema_model([X, cls_])[:, -1]
                     loss = F.mse_loss(output, y)
                 self.val_loss_logger.update(loss.detach())
             self.val_loss_logger.all_reduce()            
@@ -157,12 +164,14 @@ class Trainer:
         ### This are the necessary steps to recover the model from the pickled file!!!
         ### prodived that you do training on a single GPU.
         model_weights = self.model.state_dict()
+        ema_model_weights = self.ema_model.state_dict()
         model_config = self.model_config
         optimizer_state = self.optimizer.state_dict()
         scheduler_state = self.scheduler.state_dict()
         
         checkpoint = {
                       "model_state_dict":model_weights,
+                      "ema_model_state_dict":ema_model_weights,
                       "model_config":model_config,
                       "optimizer_state":optimizer_state,
                       "scheduler_state": scheduler_state,

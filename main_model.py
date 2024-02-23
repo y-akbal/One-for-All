@@ -172,12 +172,13 @@ class Model(nn.Module):
         except Exception as exp:
             print(f"Something went wrong with {exp}!!!!!")
 
-    @torch.no_grad()
-    def generate(self, 
+    @torch.inference_mode()
+    def generate(self,
                  x_init:tuple[torch.Tensor,torch.Tensor], 
                  horizon:int = 10,              
                  ):
-        ## Batched long term forcast --- 
+        ## This dude generates long term forecasts with given horizon value.
+        ## There is no gradient tracking therefore, should be used only in inference model
 
         device = f"cuda:{x_init[0].get_device()}" if x_init[0].get_device() >= 0 else "cpu" ## Get the device
 

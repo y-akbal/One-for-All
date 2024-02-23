@@ -22,7 +22,7 @@ LAGSIZE = 256
 def return_dataset(data_dir:str = DATA_DIR,
                     data_files:tuple[str, str, str] = DATA_FILES,
                     batch_size:int = BATCH_SIZE,
-                    lag_size = LAGSIZE)-> DataLoader:
+                    lag_size:int = LAGSIZE)-> DataLoader:
     
     file_name, lengths_name, names_file  = map(lambda x: os.path.join(data_dir, x), data_files)
      
@@ -47,6 +47,8 @@ def preprocess_model_file(model_state:dict) -> dict:
         ## This is needed because the save model is from DDP and therefore module. is used in weights
         if "module" in keys:
             keys = keys.replace("module.", "")
+        if "n_averaged" in keys:
+            continue
         new_model_state_dict[keys] = values.cpu()
     return new_model_state_dict
     
@@ -64,7 +66,13 @@ def return_model(**kwargs)->tuple[nn.Module, int]:
     device = torch.device(device)
     print(f"The device to be used is {device}")
     ## -- ## ok we now load the model!!!
-    model_state_dict = preprocess_model_file(states["model_state_dict"])
+    
+    if kwargs["ema_model"] == "True":
+        model_state_dict = preprocess_model_file(states["ema_model_state_dict"])
+        print("EMA model is to be used!!!")
+    else:
+        model_state_dict = preprocess_model_file(states["model_state_dict"])
+        print("The trained model is to be used!!!")
     model_config = states["model_config"]
     print(model_config)
     ## create the model
@@ -124,7 +132,7 @@ def main(**kwargs)->None:
             TSE.append(file_name)
             #print(y_output.shape, y.shape)
 
-
+                
     TSE = tuple_to_list(TSE)    
 
     Y_pred_concatted = np.concatenate(Y_output, axis = 0)
@@ -136,7 +144,7 @@ def main(**kwargs)->None:
     try:
         df = pd.DataFrame(Y_pred_vs_true)
         df["name"] = TSE
-        df.to_csv("test.csv")
+        df.to_csv(kwargs["model_file"]+"ema"+kwargs["ema_model"]+kwargs["report_file"])
         print("CSV file created")
     except Exception as e:
         print(f"Something went wrong with the conversion!!! {e}")
@@ -146,6 +154,7 @@ def main(**kwargs)->None:
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Validation of model on a dataset")
+
 
     parser.add_argument(
         "--model_dir",
@@ -174,6 +183,14 @@ if __name__ == "__main__":
         type=int,
         help="GPU to use for inference!!!",
     )
+
+    parser.add_argument(
+        "--ema_model",
+        default = "True",
+        type=str,
+        help="GPU to use for inference!!!",
+    )
+
 
     parser.add_argument(
         "--report_file",
