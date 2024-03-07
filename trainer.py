@@ -71,8 +71,8 @@ class Trainer:
         ## -- ##        
         self.optimizer.zero_grad()
         with self.autocast(device_type="cuda", dtype=torch.bfloat16):
-            X, y = source[:, :-1], source[:,-1]  
-            output = self.model([X, cls_])[:, -1]
+            X, y = source[:, :-1], source[:,1:]  
+            output = self.model([X, cls_])
             loss = F.mse_loss(output, y)
         
         #print(X.shape, y.shape, source[:,-1].shape, output.shape, cls_.shape, source.shape)

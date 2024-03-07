@@ -32,7 +32,7 @@ def return_dataset(data_dir:str = DATA_DIR,
                               shuffle=False, 
                               num_workers= 4, 
                               prefetch_factor = 2,
-                              drop_last = True)
+                              drop_last = False)
     print(f"Data set loaded successfully, it has {len(batched_data)} many batches!!!")
     return batched_data
 

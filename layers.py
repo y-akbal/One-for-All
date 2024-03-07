@@ -109,6 +109,7 @@ class Upsampling(nn.Module):
         FFN_expansion_size = 2,
         **kwargs,
     ):
+        ## This layers uses no positional embedding at all!!!!
         super().__init__(**kwargs)
         assert (
             lags / pool_size
@@ -144,17 +145,8 @@ class Upsampling(nn.Module):
         ## Linear Layer
         self.linear = Linear(d_out, d_out, bias=True, dropout=dropout_linear)
         ### Embedding enumeration
-        self.register_buffer(
-            "num_enum",
-            torch.tensor(
-                [i for i in range(self.num_pools)],
-                dtype=torch.int,
-                requires_grad=False,
-            ),
-        )
-        ## positional embedding of pools ##
-        self.pe_embedding = nn.Embedding(self.num_pools, d_out)
-        ## positional embeddings of time series
+        
+        ## ts_embedding
         self.ts_embedding = nn.Embedding(self.num_of_ts, d_out)
         ## cluster embedding of time series
         self.num_of_clusters = num_of_clusters
@@ -177,7 +169,6 @@ class Upsampling(nn.Module):
         
         ## From now on we convey W = W/pool_size
         # BxHxW += #BxHxW (WxH -> HxW)   # Position embedding of pools
-        convolved_ts += self.pe_embedding(self.num_enum[:convolved_ts.shape[-1]]).transpose(-1, -2)
         activated = self.conv_activation(convolved_ts)  # BxHxW -> BxHxW
         normalized = self.normalization(activated)  # BxHxW -> BxHxW
         
@@ -193,9 +184,9 @@ class Upsampling(nn.Module):
                 )  ### cluster embeddings to help the model
             )
         else:
-            dense_applied += normalized + self.ts_embedding(te).transpose(-1, -2)
+            dense_applied += normalized
         ## Final linear layer two mix the channels
-        return self.linear(dense_applied)  # BxHxW-> BxHxW
+        return self.linear(dense_applied)  + self.ts_embedding(te).transpose(-1, -2) # BxHxW-> BxHxW
         # Bx1xW-> BxHxW/pool_size (this what happens finally)
 
 

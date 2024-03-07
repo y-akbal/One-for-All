@@ -102,8 +102,11 @@ class Model(nn.Module):
             "attention_FFN_expansion_size": attention_FFN_expansion_size,
         }
 
-    def forward(self, x:tuple[torch.Tensor, torch.Tensor]):
+    def forward(self, 
+                x:tuple[torch.Tensor, torch.Tensor], 
+                block_output:bool = False):
         ## Here we go with upsampling layer
+        ## block_output is needed in the case that you will need topless transformer model!!!
         if self.cluster_used:
             x, tse_embedding, cluster_embedding = x[0].unsqueeze(-2), x[1].unsqueeze(-1), x[2]
             x = self.up_sampling((x, tse_embedding, cluster_embedding))
@@ -115,8 +118,10 @@ class Model(nn.Module):
             
         ## Concatted transformer blocks
         ###
-
-        return self.Linear(self.blocks(x)).squeeze(-2)
+        transformer_block_output = self.blocks(x)
+        if block_output:
+            return self.Linear(transformer_block_output).squeeze(-2), transformer_block_output
+        return self.Linear(transformer_block_output).squeeze(-2)
 
     @classmethod
     def from_config_file(cls, config_file):
@@ -130,14 +135,27 @@ class Model(nn.Module):
     ### These dudes stay here for future versions ### 
     ###  mostly for inference using single gpu!!! ###
     @classmethod
-    def from_pretrained(cls, file_name):
+    def from_pretrained(cls, 
+                        file_name, 
+                        use_ema_model:bool = False):
         try:
             dict_ = torch.load(file_name)
             config = dict_["model_config"]
-            state_dict = dict_["model_state_dict"]
             model = cls(**config)
 
-            model.load_state_dict(state_dict)
+            state_dict = dict_["model_state_dict"] if not use_ema_model else dict_["ema_model_state_dict"]
+
+            new_model_state_dict = {}
+
+            for keys, values in state_dict.items():
+            ## This is needed because the save model is from DDP and therefore module. is used in weights
+                if "module" in keys:
+                    keys = keys.replace("module.", "")
+                if "n_averaged" in keys:
+                    continue
+                new_model_state_dict[keys] = values.cpu()
+           
+            model.load_state_dict(new_model_state_dict)
             print(
                 f"Model loaded successfully!!!! The current configuration is {config}"
             )
@@ -172,7 +190,7 @@ class Model(nn.Module):
         except Exception as exp:
             print(f"Something went wrong with {exp}!!!!!")
 
-    @torch.inference_mode()
+    
     def generate(self,
                  x_init:tuple[torch.Tensor,torch.Tensor], 
                  horizon:int = 10,              
@@ -193,9 +211,11 @@ class Model(nn.Module):
         
         for i in tqdm_range:
             if L+i <= self.lags:
-                next_lag = self([horizon_predictions[:, :L+i], x_init[1]])[:, -1]
+                with torch.inference_mode():
+                    next_lag = self([horizon_predictions[:, :L+i], x_init[1]], block_output = False)[:, -1]
             else:
-                next_lag = self([horizon_predictions[:, -self.lags +(L+i):L+i], x_init[1]])[:, -1]
+                with torch.inference_mode():
+                    next_lag = self([horizon_predictions[:, -self.lags +(L+i):L+i], x_init[1]], block_output = False)[:, -1]
 
             horizon_predictions[:, L+i] = next_lag
 

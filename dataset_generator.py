@@ -4,7 +4,7 @@ import numpy as np
 
 
 class ts_concatted:
-    def __init__(self, array: np.ndarray, lengths: np.ndarray, lags: np.ndarray, file_names:str = None):
+    def __init__(self, array: np.ndarray, lengths: np.ndarray, lags: int, file_names:str = None):
         """
         array should be concatted arrays,
         lengths should be the lengths of the individual arrays,
