@@ -443,7 +443,8 @@ class multi_head_attention(nn.Module):
                  lag=512, 
                  projection_dropout=0.2, 
                  att_head_dropout = 0.1,
-                 causal=True):
+                 causal=True,
+                 flash_attention = True):
         super().__init__()
 
         assert (
@@ -453,48 +454,49 @@ class multi_head_attention(nn.Module):
         )
 
         self.embedding_dim = embedding_dim
-        self.linear = Linear(embedding_dim, embedding_dim, dropout = 0.0, bias = False)
+
+        self.linear = Linear(embedding_dim, 3*embedding_dim, dropout = 0.0, bias = False)
 
         self.heads = heads
         self.causal = causal
+        self.flash_attention = flash_attention
+        self.att_dropout_rate = att_head_dropout
         #self.W = lag  ### Here W stands for width (or lags), redundant will not be needed really!!!!
-        self.att_dropout = nn.Dropout(p=att_head_dropout)
+        if not self.flash_attention:
+            self.att_dropout = nn.Dropout(p=att_head_dropout)
         ## output linear
         self.projection = Linear(embedding_dim, embedding_dim, bias=True, dropout = projection_dropout)
 
         ### blocking attenting to Future ###
         if self.causal:
+            mask = torch.triu(torch.ones(lag,lag, dtype = torch.bool),1)
             self.register_buffer(
-                "causal_factor",
-                torch.tril(
-                    torch.ones(lag , lag , dtype=torch.bool),
-                    diagonal=-1,
-                ),
-            )
+                "mask", mask)
 
-    def forward(self, x):  # BxHxL -> BxHxL
+    def forward(self, x:torch.Tensor):  # BxHxL -> BxHxL
+
         B, embedding_dim, L = x.shape
+        K, Q, V = self.linear(x).split(self.embedding_dim, -2) #BxHxL -> Bx3*HxL
+        K, Q, V = map(lambda x : x.view(B, self.heads, embedding_dim//self.heads, L), [K, Q, V])
         
-        KQV = self.linear(x) #BxHxL -> Bx3*HxL
-        KQV = KQV.view(B, self.heads, int(self.embedding_dim / self.heads), L) #BxH*L -> Bx(num_heads)x(H/num_heads)*L
-        attention_scores = KQV.transpose(-2, -1) @ KQV
-        ## We need to change the causal factor to something better, to avoid working with static shapes!!!
-        if self.causal:
-            attention_scores = attention_scores.masked_fill(
-                self.causal_factor[:L, :L], -torch.inf
-            )
-        
-        softmaxed_att = nn.Softmax(-2)(attention_scores * self.embedding_dim ** (-0.5))
-        
-        att = self.att_dropout(
-            softmaxed_att,
-        )
-
-        t = (KQV @ att).view(B, self.embedding_dim, L)
-        ## Check the dropout of the output is applied here automatically!!!
-        return self.projection(t)
-
-
+        if self.flash_attention:
+            K, Q, V = map(lambda x: x.transpose(-1, -2), [K, Q, V])
+            t = F.scaled_dot_product_attention(Q, K, V, is_causal = self.causal, dropout_p = self.att_dropout_rate)
+        else:
+            ## Need to add here causal factor!!!
+            t = (Q.transpose(-1,-2) @ K)/(Q.shape)[-2]**0.5
+            t = t.masked_fill(self.mask[:L,:L], float("-inf")) if self.causal else t
+            t = F.softmax(t,  -1) @ V.transpose(-1, -2)
+            t = self.att_dropout(t)
+        t = t.transpose(-1, -2).contiguous().view(B, embedding_dim, L)
+        t = self.projection(t)
+        return t
+""""
+torch.manual_seed(0)
+model = multi_head_attention(embedding_dim=12)
+model.eval()
+model.state_dict()
+model(torch.randn(1, 10, 12))""""
 
 
 class attention_block(nn.Module):
