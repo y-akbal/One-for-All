@@ -1,7 +1,7 @@
 import numpy as np
 #import torch
 #from torch.utils.data import DataLoader
-
+from functools import lru_cache, partial
 
 class ts_concatted:
     def __init__(self, array: np.ndarray, lengths: np.ndarray, lags: int, file_names:str = None):
@@ -29,14 +29,15 @@ class ts_concatted:
         if file_names is not None:
             self.__read_csvfile_names__()
     ### We should add here kind a lru cache??? Do not want to be searchsorted always?
-    def __place__(self, x: int, array: np.ndarray) -> int:
-        return np.searchsorted(array, x, side="right")
+    @partial(lru_cache, static_argnums=(0,))
+    def __place__(self, x: int) -> int:
+        return np.searchsorted(self.cumhors, x, side="right")
 
     def __getitem__(self, i):
         if i > self.__len__() - 1:
             raise IndexError
         ### Otherwise go ahead my son ###
-        place_ = self.__place__(i, self.cumhors)
+        place_ = self.__place__(i)
 
         X = self.array[i + self.m[place_] : i + self.m[place_] + self.lags[place_]]
         return X, place_, self.__file_names__[place_]
