@@ -28,7 +28,7 @@ class ts_concatted:
         ## -- given that you provide txt files -- ##
         if file_names is not None:
             self.__read_csvfile_names__()
-
+    ### We should add here kind a lru cache??? Do not want to be searchsorted always?
     def __place__(self, x: int, array: np.ndarray) -> int:
         return np.searchsorted(array, x, side="right")
 
