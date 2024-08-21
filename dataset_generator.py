@@ -1,7 +1,7 @@
 import numpy as np
 #import torch
 #from torch.utils.data import DataLoader
-from functools import lru_cache, partial
+from functools import lru_cache, partial, cache
 
 class ts_concatted:
     def __init__(self, array: np.ndarray, lengths: np.ndarray, lags: int, file_names:str = None):
@@ -28,8 +28,9 @@ class ts_concatted:
         ## -- given that you provide txt files -- ##
         if file_names is not None:
             self.__read_csvfile_names__()
-    ### We should add here kind a lru cache??? Do not want to be searchsorted always?
-    @partial(lru_cache, static_argnums=(0,))
+    
+    
+    @cache
     def __place__(self, x: int) -> int:
         return np.searchsorted(self.cumhors, x, side="right")
 
