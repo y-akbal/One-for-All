@@ -84,7 +84,7 @@ if __name__ == "__main__":
         L = memmap_array()
         L.fit(dtype=np.float32)
         print(
-        f"Memmap is initialized successfully. Total length is {len(L.array)}, and lengths are \n {L.lengths}. Thank you b****"
+        f"Memmap is initialized successfully. Total length is {len(L.array)}, and lengths are \n {L.lengths}. Thank you buddy!"
         )
     except Exception as e:
         print(e)
